@@ -1,0 +1,25 @@
+{
+  "_comment": "Sanitized USL-Environmental /v1/sensors payload. Replace placeholder values with real data captured from your Protect console. Remove this _comment key before using in production tests.",
+  "id": "DEVICE_ID_HERE",
+  "modelKey": "sensor",
+  "name": "Environmental Sensor",
+  "state": "CONNECTED",
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "mountType": "none",
+  "batteryStatus": {
+    "percentage": 85,
+    "isLow": false
+  },
+  "isConnected": true,
+  "isMotionDetected": false,
+  "leakDetectedAt": null,
+  "tamperingDetectedAt": null,
+  "stats": {
+    "temperature": { "value": 22.5, "status": "safe" },
+    "humidity": { "value": 48.0, "status": "safe" },
+    "light": { "value": 120.0, "status": "safe" }
+  },
+  "temperatureSettings": { "isEnabled": true, "lowThreshold": 0, "highThreshold": 40, "margin": 1 },
+  "humiditySettings": { "isEnabled": true, "lowThreshold": 10, "highThreshold": 90, "margin": 2 },
+  "lightSettings": { "isEnabled": true, "lowThreshold": 0, "highThreshold": 1000, "margin": 10 }
+}

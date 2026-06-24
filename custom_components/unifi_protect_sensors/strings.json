@@ -1,0 +1,50 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up UniFi Protect Sensors",
+        "description": "Enter your UniFi Protect console details. A local user account (not a Ubiquiti cloud/SSO account) is required.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "api_key": "API Key (optional but recommended)",
+          "verify_ssl": "Verify SSL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to UniFi Protect console",
+      "invalid_auth": "Invalid credentials or API key",
+      "unknown": "Unexpected error — check the Home Assistant logs"
+    },
+    "abort": {
+      "already_configured": "This device is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": { "name": "Temperature" },
+      "humidity": { "name": "Humidity" },
+      "illuminance": { "name": "Light Level" },
+      "battery": { "name": "Battery" },
+      "co2": { "name": "CO\u2082" },
+      "pm1": { "name": "PM1" },
+      "pm25": { "name": "PM2.5" },
+      "pm4": { "name": "PM4" },
+      "pm10": { "name": "PM10" },
+      "voc_index": { "name": "VOC Index" },
+      "nox_index": { "name": "NOx Index" },
+      "aqi": { "name": "Air Quality Index" },
+      "vape_index": { "name": "Vape Index" }
+    },
+    "binary_sensor": {
+      "leak": { "name": "Water Leak" },
+      "battery_low": { "name": "Battery Low" },
+      "connectivity": { "name": "Connected" },
+      "tamper": { "name": "Tamper" },
+      "vape_detected": { "name": "Vape Detected" }
+    }
+  }
+}
