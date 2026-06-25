@@ -93,10 +93,21 @@ async def async_setup_entry(
             model=device.get("type") or device.get("modelKey"),
             manufacturer="Ubiquiti",
         )
+        device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
         for description in BINARY_SENSOR_DESCRIPTIONS:
-            # Create entities for all descriptions; is_on returns None when the field
-            # is absent. Entities whose keys don't appear for a given device type will
-            # be unavailable rather than permanently missing.
+            # Only create entities whose expected_source includes this device's type.
+            sources = [s.strip() for s in description.expected_source.split(",") if s.strip()]
+            if sources and not any(s.lower() in device_type.lower() or device_type.lower() in s.lower() for s in sources):
+                continue
+            # For timestamp-based fields (leak, tamper), the key being present in the
+            # payload (even as null) means the device supports it. Check key existence
+            # rather than value truthiness.
+            field_parts = description.payload_field.split(".")
+            container = device
+            for part in field_parts[:-1]:
+                container = container.get(part, {}) if isinstance(container, dict) else {}
+            if not isinstance(container, dict) or field_parts[-1] not in container:
+                continue
             entities.append(UniFiProtectBinarySensor(coordinator, device_id, description))
 
     async_add_entities(entities)

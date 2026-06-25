@@ -88,7 +88,18 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             raise UpdateFailed(f"Cannot reach Protect console: {err}") from err
 
         if isinstance(payload, list):
-            return {d["id"]: d for d in payload if isinstance(d, dict) and "id" in d}
-        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
-            return {d["id"]: d for d in payload["data"] if isinstance(d, dict) and "id" in d}
-        raise UpdateFailed(f"Unexpected sensors payload shape: {type(payload).__name__}")
+            result = {d["id"]: d for d in payload if isinstance(d, dict) and "id" in d}
+        elif isinstance(payload, dict) and isinstance(payload.get("data"), list):
+            result = {d["id"]: d for d in payload["data"] if isinstance(d, dict) and "id" in d}
+        else:
+            raise UpdateFailed(f"Unexpected sensors payload shape: {type(payload).__name__}")
+
+        _LOGGER.debug(
+            "Protect sensors response: %d device(s) — %s",
+            len(result),
+            ", ".join(
+                f"{d.get('name', did)}({d.get('type') or d.get('modelKey', '?')})"
+                for did, d in result.items()
+            ),
+        )
+        return result
