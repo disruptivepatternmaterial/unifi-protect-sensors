@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-06-25
 
 ### Added
 - `coordinator.py` — `ProtectSensorsCoordinator` polling the `/proxy/protect/integration/v1/sensors`
@@ -41,6 +41,8 @@ All notable changes to this project will be documented here.
 - `coordinator.py` — replaced per-request `aiohttp.ClientSession` creation with
   `async_get_clientsession(hass)` to use the HA-managed shared session with correct lifecycle.
 - `pyproject.toml` — added `requires-python = ">=3.11"` to match `target-version = "py311"`.
+
+---
 
 ---
 
