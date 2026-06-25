@@ -1,5 +1,7 @@
 """Sensor entities for UniFi Protect Sensors."""
 from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,24 +19,27 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .coordinator import ProtectSensorsCoordinator
+from .helpers import get_nested
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ProtectSensorEntityDescription(SensorEntityDescription):
     """Extends SensorEntityDescription with Protect-specific metadata."""
 
-    # Dot-separated path into the Protect sensor payload (confirmed via fixtures)
     payload_field: str
-    # Which device(s) expose this metric
     expected_source: str = ""
 
 
 SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
-    # ── USL-Environmental ────────────────────────────────────────────────────
     ProtectSensorEntityDescription(
         key="temperature",
         translation_key="temperature",
@@ -73,9 +78,6 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
     ),
-    # ── UP-AirQuality ─────────────────────────────────────────────────────────
-    # NOTE: payload_field paths below are PROVISIONAL and will be confirmed
-    # once real sanitized fixtures are captured from an actual UP-AirQuality device.
     ProtectSensorEntityDescription(
         key="co2",
         translation_key="co2",
@@ -124,7 +126,6 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         translation_key="voc_index",
         payload_field="stats.voc.value",
         expected_source="UP-AirQuality",
-        # VOC index (1-500) — not a mass concentration; no unit or device class
         state_class=SensorStateClass.MEASUREMENT,
     ),
     ProtectSensorEntityDescription(
@@ -132,7 +133,6 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         translation_key="nox_index",
         payload_field="stats.nox.value",
         expected_source="UP-AirQuality",
-        # NOx index (1-500) — not a mass concentration; no unit or device class
         state_class=SensorStateClass.MEASUREMENT,
     ),
     ProtectSensorEntityDescription(
@@ -148,7 +148,6 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         translation_key="vape_index",
         payload_field="stats.vape.value",
         expected_source="UP-AirQuality",
-        # Vape index (0-100) — unitless index value
         state_class=SensorStateClass.MEASUREMENT,
     ),
 )
@@ -159,32 +158,57 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensor entities (populated once coordinator is wired up)."""
-    async_add_entities([])
+    """Set up sensor entities from coordinator data."""
+    coordinator: ProtectSensorsCoordinator = hass.data[DOMAIN][entry.entry_id]
+    dev_reg = dr.async_get(hass)
+    entities: list[UniFiProtectMetricSensor] = []
+
+    for device_id, device in coordinator.data.items():
+        dev_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, device_id)},
+            name=device.get("name", device_id),
+            model=device.get("type") or device.get("modelKey"),
+            manufacturer="Ubiquiti",
+        )
+        for description in SENSOR_DESCRIPTIONS:
+            # Create entities for all descriptions; native_value returns None when
+            # the field is absent (device doesn't support that reading). This avoids
+            # entities being permanently missing when a field happens to be null
+            # at startup (e.g. sensor warming up).
+            entities.append(UniFiProtectMetricSensor(coordinator, device_id, description))
+
+    async_add_entities(entities)
 
 
-class UniFiProtectMetricSensor(SensorEntity):
-    """A UniFi Protect metric sensor backed by parsed Protect data."""
+class UniFiProtectMetricSensor(CoordinatorEntity[ProtectSensorsCoordinator], SensorEntity):
+    """A UniFi Protect metric sensor backed by the coordinator."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        unique_device_id: str,
+        coordinator: ProtectSensorsCoordinator,
+        device_id: str,
         description: ProtectSensorEntityDescription,
-        value: Any | None = None,
     ) -> None:
-        """Initialize the sensor."""
+        super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{unique_device_id}_{description.key}"
-        self._value = value
+        self._device_id = device_id
+        self._attr_unique_id = f"{device_id}_{description.key}"
+        self._attr_device_info = {"identifiers": {(DOMAIN, device_id)}}
 
     @property
     def native_value(self) -> Any | None:
-        """Return the sensor value."""
-        return self._value
+        device = self.coordinator.data.get(self._device_id)
+        if device is None:
+            return None
+        return get_nested(device, self.entity_description.payload_field)
 
-    def update_value(self, value: Any | None) -> None:
-        """Update value and push HA state."""
-        self._value = value
+    @property
+    def available(self) -> bool:
+        return super().available and self._device_id in self.coordinator.data
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()

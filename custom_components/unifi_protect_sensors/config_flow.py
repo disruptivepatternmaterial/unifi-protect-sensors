@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -9,6 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_API_KEY,
@@ -17,6 +19,43 @@ from .const import (
     DEFAULT_VERIFY_SSL,
     DOMAIN,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+_LOGIN_PATH = "/api/auth/login"
+_SENSORS_PATH = "/proxy/protect/integration/v1/sensors"
+
+
+async def _async_validate_credentials(hass, host: str, port: int, username: str, password: str, api_key: str, verify_ssl: bool) -> str | None:
+    """Try to reach the console and authenticate. Returns error key or None on success."""
+    base_url = f"https://{host}:{port}"
+    session = async_get_clientsession(hass, verify_ssl=verify_ssl)
+    try:
+        if api_key:
+            async with session.get(
+                f"{base_url}{_SENSORS_PATH}",
+                headers={"Authorization": f"Bearer {api_key}"},
+                ssl=verify_ssl or None,
+                timeout=10,
+            ) as resp:
+                if resp.status == 401:
+                    return "invalid_api_key"
+                if resp.status != 200:
+                    return "cannot_connect"
+        else:
+            async with session.post(
+                f"{base_url}{_LOGIN_PATH}",
+                json={"username": username, "password": password},
+                ssl=verify_ssl or None,
+                timeout=10,
+            ) as resp:
+                if resp.status == 401:
+                    return "invalid_auth"
+                if resp.status not in (200, 201):
+                    return "cannot_connect"
+    except Exception:
+        return "cannot_connect"
+    return None
 
 
 class UniFiProtectSensorsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -31,12 +70,24 @@ class UniFiProtectSensorsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(user_input[CONF_HOST])
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=f"UniFi Protect Sensors ({user_input[CONF_HOST]})",
-                data=user_input,
+            error = await _async_validate_credentials(
+                self.hass,
+                host=user_input[CONF_HOST],
+                port=user_input[CONF_PORT],
+                username=user_input.get(CONF_USERNAME, ""),
+                password=user_input.get(CONF_PASSWORD, ""),
+                api_key=user_input.get(CONF_API_KEY, ""),
+                verify_ssl=user_input.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
             )
+            if error:
+                errors["base"] = error
+            else:
+                await self.async_set_unique_id(user_input[CONF_HOST])
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=f"UniFi Protect Sensors ({user_input[CONF_HOST]})",
+                    data=user_input,
+                )
 
         return self.async_show_form(
             step_id="user",
@@ -44,8 +95,8 @@ class UniFiProtectSensorsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_HOST): str,
                     vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(CONF_USERNAME, default=""): str,
+                    vol.Optional(CONF_PASSWORD, default=""): str,
                     vol.Optional(CONF_API_KEY, default=""): str,
                     vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
                 }
@@ -76,5 +127,14 @@ class UniFiProtectSensorsOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({}))
-
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_VERIFY_SSL,
+                        default=self._config_entry.options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+                    ): bool,
+                }
+            ),
+        )

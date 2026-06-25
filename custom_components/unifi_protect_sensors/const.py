@@ -14,7 +14,7 @@ CONF_API_KEY = "api_key"
 CONF_VERIFY_SSL = "verify_ssl"
 
 DEFAULT_PORT = 443
+# UniFi devices use self-signed certs; users may enable verification via options flow
 DEFAULT_VERIFY_SSL = False
 
 ATTR_PAYLOAD_FIELD = "payload_field"
-

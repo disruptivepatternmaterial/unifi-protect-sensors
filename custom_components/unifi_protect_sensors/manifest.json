@@ -4,10 +4,10 @@
   "after_dependencies": ["unifiprotect"],
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/ntableman/unifi-protect",
+  "documentation": "https://github.com/disruptivepatternmaterial/unifi-protect-sensors",
   "integration_type": "hub",
-  "iot_class": "local_push",
-  "issue_tracker": "https://github.com/ntableman/unifi-protect/issues",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/disruptivepatternmaterial/unifi-protect-sensors/issues",
   "requirements": ["uiprotect>=14.0.0"],
   "version": "0.1.0"
 }

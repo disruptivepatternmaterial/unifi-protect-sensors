@@ -1,7 +1,7 @@
 {
-  "_comment": "Sanitized USL-Environmental /v1/sensors payload. Replace placeholder values with real data captured from your Protect console. Remove this _comment key before using in production tests.",
-  "id": "DEVICE_ID_HERE",
+  "id": "abc123",
   "modelKey": "sensor",
+  "type": "USL-Environmental",
   "name": "Environmental Sensor",
   "state": "CONNECTED",
   "mac": "AA:BB:CC:DD:EE:FF",

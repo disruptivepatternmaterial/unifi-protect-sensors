@@ -1,6 +1,11 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Tests use HA stubs when homeassistant is not installed; no live HA needed
+
+[project]
+name = "unifi-protect-sensors"
+requires-python = ">=3.11"
 
 [tool.ruff]
 line-length = 120

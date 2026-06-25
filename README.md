@@ -1,70 +1,64 @@
-# UniFi Protect Sensors
+# UniFi Protect Sensors — Home Assistant Integration
 
-A HACS-deployable Home Assistant custom integration that exposes environmental
-and air-quality sensor data from UniFi Protect devices.
+A custom Home Assistant integration that polls the UniFi Protect `/proxy/protect/integration/v1/sensors` endpoint and exposes environmental and air-quality sensor data as native HA entities.
 
 ## Supported Devices
 
-| Device | Entities |
+| Model | Sensors |
 |---|---|
-| **USL-Environmental** | Temperature, Humidity, Ambient Light, Water Leak, Battery %, Battery Low, Connectivity, Tamper |
-| **UP-AirQuality** | Temperature, Humidity, CO2, PM1, PM2.5, PM4, PM10, VOC Index, NOx Index, AQI, Vape Index, Vape Detected, Connectivity |
+| **USL-Environmental** | Temperature, Humidity, Illuminance, Battery, Leak, Tamper, Connectivity, Battery Low |
+| **UP-AirQuality** | Temperature, Humidity, CO₂, PM1, PM2.5, PM4, PM10, VOC Index, NOx Index, AQI, Vape Index, Vape Detected, Connectivity |
 
-## Requirements
+## Installation (HACS)
 
-- Home Assistant 2025.1.0 or later
-- UniFi Protect 7.1.0 or later (7.1.76+ recommended for UP-AirQuality)
-- uiprotect 14.0.0 or later
-- A local UniFi Protect user account (not a Ubiquiti cloud/SSO account)
-
-## Installation via HACS
-
-1. Open HACS, Integrations, three-dot menu, Custom repositories.
-2. Add `https://github.com/ntableman/unifi-protect` as an Integration.
-3. Search for "UniFi Protect Sensors" and install.
+1. In Home Assistant, open **HACS → Integrations → ⋮ → Custom repositories**.
+2. Add `https://github.com/disruptivepatternmaterial/unifi-protect-sensors` as type **Integration**.
+3. Install **UniFi Protect Sensors** from the HACS catalogue.
 4. Restart Home Assistant.
-5. Go to Settings, Devices and Services, Add Integration, search for "UniFi Protect Sensors".
-6. Enter your Protect console host, port, local username, password, and API key.
-
-## Manual Installation
-
-Copy `custom_components/unifi_protect_sensors/` into your Home Assistant
-`config/custom_components/` directory, then restart Home Assistant.
+5. Go to **Settings → Devices & Services → Add Integration** and search for **UniFi Protect Sensors**.
 
 ## Configuration
 
-| Field | Description |
-|---|---|
-| Host | Local IP or hostname of your UniFi console |
-| Port | Default 443 |
-| Username | Local user on the console (not cloud SSO) |
-| Password | Local user password |
-| API Key | Generated from the console (recommended) |
-| Verify SSL | Disable for self-signed certificates |
+| Field | Required | Default | Description |
+|---|---|---|---|
+| Host | Yes | — | IP or hostname of your UniFi console |
+| Port | Yes | 443 | HTTPS port |
+| Username | No* | — | Local account username |
+| Password | No* | — | Local account password |
+| API Key | No* | — | API key from the Protect console (preferred) |
+| Verify SSL | No | False | Enable to validate the console's TLS certificate |
 
-## Troubleshooting
+*Either an API Key **or** Username + Password is required.
 
-| Symptom | Likely cause |
-|---|---|
-| Entities appear "Unavailable" | Protect console unreachable or API key revoked |
-| CO2/PM entities missing | UP-AirQuality not on Protect 7.1.76+ or different field names |
-| Vape detection not working | Payload field name unconfirmed; see GitHub issues |
+## Authentication
 
-## Known Limitations
+**API Key (recommended)**: Generate one in the Protect web UI under **System → API Keys**. The key is sent as a `Bearer` token.
 
-- Air-quality payload field names for UP-AirQuality are provisional until real
-  sanitized fixtures are captured from an actual device.
-- VOC index, NOx index, AQI, and vape index are unitless index values.
-- UP-AirQuality is listed as "Available Jun 2026" by Ubiquiti.
+**Username / Password**: The integration performs a cookie-based login to `/api/auth/login`. The `TOKEN` cookie is stored in memory and refreshed automatically on 401 responses.
 
-## Development
+## Poll Interval
+
+Sensor data is fetched every **30 seconds** (`local_polling` class).
+
+## Entity Reference
+
+See [docs/ENTITIES.md](docs/ENTITIES.md) for the full entity list with API field paths and supported device models.
+
+## Changelog
+
+See [docs/CHANGELOG.md](docs/CHANGELOG.md).
+
+## Requirements
+
+- Home Assistant 2024.1 or later
+- Python 3.11+
+- `uiprotect >= 14.0.0` (listed as `after_dependencies` — not directly used but ensures the UniFi Protect integration is set up first)
+
+## Development & Testing
 
 ```bash
-python -m pytest tests/
+# Run tests (no HA install required — stubs are injected automatically)
+python -m pytest tests/ -v
 ```
 
-See docs/TESTING.md for the full test plan.
-
-## License
-
-MIT
+Tests cover: helper functions, sensor/binary-sensor description structure, coordinator payload parsing, and entity property logic.
