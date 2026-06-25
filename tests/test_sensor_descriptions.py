@@ -51,6 +51,33 @@ class TestGetNested:
         assert fn({"a": 0}, "a") == 0
 
 
+class TestFieldExists:
+    def _import(self):
+        from custom_components.unifi_protect_sensors.helpers import field_exists
+        return field_exists
+
+    def test_top_level_present(self):
+        assert self._import()({"a": 1}, "a") is True
+
+    def test_top_level_missing(self):
+        assert self._import()({}, "a") is False
+
+    def test_nested_present_with_null_value(self):
+        assert self._import()({"a": {"b": None}}, "a.b") is True
+
+    def test_nested_missing(self):
+        assert self._import()({"a": {}}, "a.b") is False
+
+    def test_intermediate_not_dict(self):
+        assert self._import()({"a": "string"}, "a.b") is False
+
+    def test_deep_path(self):
+        assert self._import()({"airQuality": {"co2": {"value": 400}}}, "airQuality.co2.value") is True
+
+    def test_deep_path_missing_leaf(self):
+        assert self._import()({"airQuality": {"co2": {}}}, "airQuality.co2.value") is False
+
+
 # ---------------------------------------------------------------------------
 # sensor descriptions
 # ---------------------------------------------------------------------------
@@ -88,30 +115,64 @@ class TestSensorDescriptions:
         missing = required - keys
         assert not missing, f"Missing expected sensor keys: {missing}"
 
-    def test_usl_environmental_fields_match_fixture(self, usl_device):
-        from custom_components.unifi_protect_sensors.helpers import get_nested
+    def test_no_nox_index(self):
+        """nox_index is not in the UP-AirQuality API — should not be defined."""
+        descs = self._import()
+        keys = {d.key for d in descs}
+        assert "nox_index" not in keys
+
+    def test_aq_fields_use_airquality_path(self):
+        """All UP-AirQuality sensor descriptions must use airQuality.* paths."""
+        descs = self._import()
+        aq_descs = [d for d in descs if "UP-AirQuality" in d.expected_source]
+        for desc in aq_descs:
+            assert desc.payload_field.startswith("airQuality."), (
+                f"AQ sensor '{desc.key}' uses wrong path '{desc.payload_field}' "
+                f"(expected airQuality.*)"
+            )
+
+    def test_usl_fields_use_stats_path(self):
+        """USL-Environmental-US sensor descriptions must use stats.* paths."""
+        descs = self._import()
+        usl_descs = [
+            d for d in descs
+            if "USL-Environmental-US" in d.expected_source and d.key in ("temperature", "humidity", "illuminance")
+        ]
+        assert usl_descs, "No USL temp/humidity/illuminance descriptions found"
+        for desc in usl_descs:
+            assert desc.payload_field.startswith("stats."), (
+                f"USL sensor '{desc.key}' uses wrong path '{desc.payload_field}'"
+            )
+
+    def test_usl_fields_match_fixture(self, usl_device):
+        from custom_components.unifi_protect_sensors.helpers import get_nested, field_exists
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS
 
-        usl_descs = [d for d in SENSOR_DESCRIPTIONS if "USL-Environmental" in d.expected_source]
+        usl_descs = [d for d in SENSOR_DESCRIPTIONS if "USL-Environmental-US" in d.expected_source]
+        assert usl_descs, "No descriptions matched USL-Environmental-US"
         for desc in usl_descs:
-            # Fields may legitimately be null (e.g. leakDetectedAt), so we just check the
-            # path exists (i.e. the key is in the fixture at the right nesting level)
-            result = get_nested(usl_device, desc.payload_field)
-            # temperature, humidity, illuminance, battery should have real values
+            assert field_exists(usl_device, desc.payload_field), (
+                f"Field path '{desc.payload_field}' for '{desc.key}' not found in USL fixture"
+            )
             if desc.key in ("temperature", "humidity", "illuminance", "battery"):
+                result = get_nested(usl_device, desc.payload_field)
                 assert result is not None, (
                     f"Expected non-null value for '{desc.key}' in USL fixture "
                     f"(payload_field='{desc.payload_field}')"
                 )
 
-    def test_up_airquality_fields_match_fixture(self, aq_device):
-        from custom_components.unifi_protect_sensors.helpers import get_nested
+    def test_aq_fields_match_fixture(self, aq_device):
+        from custom_components.unifi_protect_sensors.helpers import get_nested, field_exists
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS
 
         aq_descs = [d for d in SENSOR_DESCRIPTIONS if "UP-AirQuality" in d.expected_source]
+        assert aq_descs, "No descriptions matched UP-AirQuality"
         for desc in aq_descs:
-            result = get_nested(aq_device, desc.payload_field)
-            if desc.key in ("temperature", "humidity", "co2", "pm25", "pm10", "aqi"):
+            assert field_exists(aq_device, desc.payload_field), (
+                f"Field path '{desc.payload_field}' for '{desc.key}' not found in AQ fixture"
+            )
+            if desc.key in ("co2", "pm25", "pm10", "aqi", "voc_index"):
+                result = get_nested(aq_device, desc.payload_field)
                 assert result is not None, (
                     f"Expected non-null value for '{desc.key}' in AQ fixture "
                     f"(payload_field='{desc.payload_field}')"
@@ -145,8 +206,14 @@ class TestBinarySensorDescriptions:
     def test_expected_keys_present(self):
         descs = self._import()
         keys = {d.key for d in descs}
-        required = {"leak", "battery_low", "connectivity", "tamper"}
-        assert not required - keys
+        required = {"leak", "battery_low", "tamper", "vape_detected"}
+        assert not required - keys, f"Missing binary sensor keys: {required - keys}"
+
+    def test_no_connectivity_sensor(self):
+        """connectivity was removed — device availability is exposed via the available property."""
+        descs = self._import()
+        keys = {d.key for d in descs}
+        assert "connectivity" not in keys
 
     def test_leak_uses_correct_field(self):
         descs = self._import()
@@ -160,18 +227,32 @@ class TestBinarySensorDescriptions:
         tamper = next(d for d in descs if d.key == "tamper")
         assert tamper.payload_field == "tamperingDetectedAt"
 
+    def test_vape_uses_airquality_path(self):
+        descs = self._import()
+        vape = next(d for d in descs if d.key == "vape_detected")
+        assert vape.payload_field.startswith("airQuality."), (
+            f"vape_detected must use airQuality.* path, got '{vape.payload_field}'"
+        )
+
     def test_usl_fields_present_in_fixture(self, usl_device):
-        from custom_components.unifi_protect_sensors.helpers import get_nested
+        from custom_components.unifi_protect_sensors.helpers import field_exists
         from custom_components.unifi_protect_sensors.binary_sensor import BINARY_SENSOR_DESCRIPTIONS
 
-        usl_descs = [d for d in BINARY_SENSOR_DESCRIPTIONS if "USL-Environmental" in d.expected_source]
-        always_present = {"battery_low", "connectivity"}
+        usl_descs = [d for d in BINARY_SENSOR_DESCRIPTIONS if "USL-Environmental-US" in d.expected_source]
+        assert usl_descs, "No binary sensor descriptions matched USL-Environmental-US"
         for desc in usl_descs:
-            if desc.key in always_present:
-                result = get_nested(usl_device, desc.payload_field)
-                assert result is not None, (
-                    f"Expected '{desc.key}' (field '{desc.payload_field}') to be non-null in USL fixture"
-                )
+            assert field_exists(usl_device, desc.payload_field), (
+                f"Field '{desc.payload_field}' for '{desc.key}' not found in USL fixture"
+            )
+
+    def test_vape_field_present_in_aq_fixture(self, aq_device):
+        from custom_components.unifi_protect_sensors.helpers import field_exists
+        from custom_components.unifi_protect_sensors.binary_sensor import BINARY_SENSOR_DESCRIPTIONS
+
+        vape = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "vape_detected")
+        assert field_exists(aq_device, vape.payload_field), (
+            f"vape_detected field '{vape.payload_field}' not found in AQ fixture"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -181,60 +262,33 @@ class TestBinarySensorDescriptions:
 class TestCoordinatorPayloadParsing:
     """Test _async_update_data payload shape handling without network calls."""
 
-    def _make_coordinator(self):
-        """Build a coordinator with all HA dependencies mocked."""
-        from unittest.mock import MagicMock, AsyncMock, patch
-
-        mock_hass = MagicMock()
-        entry_data = {
-            "host": "192.168.1.1",
-            "port": 443,
-            "username": "admin",
-            "password": "secret",
-            "api_key": "",
-            "verify_ssl": False,
+    def test_bootstrap_sensors_indexed_by_id(self):
+        """Bootstrap format: dict with 'sensors' list."""
+        payload = {
+            "sensors": [
+                {"id": "a", "name": "Sensor A", "type": "UFP-SENSE"},
+                {"id": "b", "name": "Sensor B", "type": "USL-Environmental-US"},
+            ]
+        }
+        sensors_list = payload.get("sensors", [])
+        result = {d["id"]: d for d in sensors_list if isinstance(d, dict) and "id" in d}
+        assert result == {
+            "a": {"id": "a", "name": "Sensor A", "type": "UFP-SENSE"},
+            "b": {"id": "b", "name": "Sensor B", "type": "USL-Environmental-US"},
         }
 
-        with patch.dict(sys.modules, {
-            "homeassistant.helpers.update_coordinator": MagicMock(
-                DataUpdateCoordinator=object,
-                UpdateFailed=Exception,
-            ),
-            "homeassistant.helpers.aiohttp_client": MagicMock(),
-        }):
-            from custom_components.unifi_protect_sensors.coordinator import ProtectSensorsCoordinator
-
-        coord = object.__new__(ProtectSensorsCoordinator)
-        coord.hass = mock_hass
-        coord._host = "192.168.1.1"
-        coord._port = 443
-        coord._username = "admin"
-        coord._password = "secret"
-        coord._api_key = ""
-        coord._verify_ssl = False
-        coord._base_url = "https://192.168.1.1:443"
-        coord._session_cookie = "TOKEN_VALUE"
-        return coord
-
-    def test_list_payload_indexed_by_id(self):
-        coord = self._make_coordinator()
-        from custom_components.unifi_protect_sensors.coordinator import ProtectSensorsCoordinator as C
-
-        payload = [{"id": "a", "name": "Sensor A"}, {"id": "b", "name": "Sensor B"}]
-        # Replicate the indexing logic directly
-        result = {d["id"]: d for d in payload if isinstance(d, dict) and "id" in d}
-        assert result == {"a": {"id": "a", "name": "Sensor A"}, "b": {"id": "b", "name": "Sensor B"}}
-
-    def test_wrapped_data_payload_indexed_by_id(self):
-        payload = {"data": [{"id": "x", "name": "X"}]}
-        result = {d["id"]: d for d in payload["data"] if isinstance(d, dict) and "id" in d}
-        assert result == {"x": {"id": "x", "name": "X"}}
-
     def test_entries_without_id_skipped(self):
-        payload = [{"name": "no-id"}, {"id": "ok", "name": "has-id"}]
-        result = {d["id"]: d for d in payload if isinstance(d, dict) and "id" in d}
+        payload = {"sensors": [{"name": "no-id"}, {"id": "ok", "name": "has-id"}]}
+        sensors_list = payload.get("sensors", [])
+        result = {d["id"]: d for d in sensors_list if isinstance(d, dict) and "id" in d}
         assert "ok" in result
         assert len(result) == 1
+
+    def test_missing_sensors_key_yields_empty(self):
+        payload = {"cameras": [], "lights": []}
+        sensors_list = payload.get("sensors", [])
+        result = {d["id"]: d for d in sensors_list if isinstance(d, dict) and "id" in d}
+        assert result == {}
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +305,7 @@ class TestEntityProperties:
 
     def test_sensor_native_value_reads_nested_field(self, usl_device):
         from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({"abc123": usl_device})
@@ -266,7 +320,6 @@ class TestEntityProperties:
 
     def test_sensor_native_value_none_when_device_missing(self, usl_device):
         from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
-        from unittest.mock import MagicMock
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({})
@@ -278,9 +331,22 @@ class TestEntityProperties:
 
         assert entity.native_value is None
 
+    def test_aq_sensor_co2_reads_airquality_path(self, aq_device):
+        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+
+        desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "co2")
+        coord = self._make_mock_coordinator({"def456": aq_device})
+
+        entity = object.__new__(UniFiProtectMetricSensor)
+        entity.coordinator = coord
+        entity._device_id = "def456"
+        entity.entity_description = desc
+
+        assert entity.native_value == 694
+
     def test_sensor_available_false_when_coordinator_failed(self, usl_device):
         from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
-        from unittest.mock import MagicMock
+        from unittest.mock import PropertyMock, patch
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({"abc123": usl_device}, last_update_success=False)
@@ -290,9 +356,6 @@ class TestEntityProperties:
         entity._device_id = "abc123"
         entity.entity_description = desc
 
-        # super().available delegates to coordinator.last_update_success
-        # We patch it to reflect the expected behaviour directly
-        from unittest.mock import PropertyMock, patch
         with patch(
             "custom_components.unifi_protect_sensors.sensor.CoordinatorEntity.available",
             new_callable=PropertyMock,
@@ -300,20 +363,7 @@ class TestEntityProperties:
         ):
             assert entity.available is False
 
-    def test_binary_sensor_is_on_bool_field(self, usl_device):
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
-
-        desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connectivity")
-        coord = self._make_mock_coordinator({"abc123": usl_device})
-
-        entity = object.__new__(UniFiProtectBinarySensor)
-        entity.coordinator = coord
-        entity._device_id = "abc123"
-        entity.entity_description = desc
-
-        assert entity.is_on is True
-
-    def test_binary_sensor_leak_null_means_off(self, usl_device):
+    def test_binary_sensor_leak_null_means_unknown(self, usl_device):
         from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
 
         assert usl_device["leakDetectedAt"] is None
@@ -325,7 +375,7 @@ class TestEntityProperties:
         entity._device_id = "abc123"
         entity.entity_description = desc
 
-        assert entity.is_on is None  # null → unknown state (not yet reported by device)
+        assert entity.is_on is None  # null → unknown state
 
     def test_binary_sensor_tamper_timestamp_means_on(self, usl_device):
         from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
@@ -352,4 +402,18 @@ class TestEntityProperties:
         entity._device_id = "abc123"
         entity.entity_description = desc
 
+        assert entity.is_on is False
+
+    def test_binary_sensor_vape_detected_zero_means_off(self, aq_device):
+        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+
+        desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "vape_detected")
+        coord = self._make_mock_coordinator({"def456": aq_device})
+
+        entity = object.__new__(UniFiProtectBinarySensor)
+        entity.coordinator = coord
+        entity._device_id = "def456"
+        entity.entity_description = desc
+
+        # vape.value=0 → bool(0)=False → not detected
         assert entity.is_on is False

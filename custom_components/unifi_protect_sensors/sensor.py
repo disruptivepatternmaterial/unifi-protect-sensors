@@ -26,7 +26,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ProtectSensorsCoordinator
-from .helpers import get_nested
+from .helpers import field_exists, get_nested
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,11 +40,12 @@ class ProtectSensorEntityDescription(SensorEntityDescription):
 
 
 SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
+    # ── UFP-SENSE / USL-Environmental-US sensors (stats.* fields) ──────────
     ProtectSensorEntityDescription(
         key="temperature",
         translation_key="temperature",
         payload_field="stats.temperature.value",
-        expected_source="USL-Environmental, UP-AirQuality",
+        expected_source="UFP-SENSE, USL-Environmental-US",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -54,7 +55,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         key="humidity",
         translation_key="humidity",
         payload_field="stats.humidity.value",
-        expected_source="USL-Environmental, UP-AirQuality",
+        expected_source="UFP-SENSE, USL-Environmental-US",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
@@ -64,24 +65,27 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         key="illuminance",
         translation_key="illuminance",
         payload_field="stats.light.value",
-        expected_source="USL-Environmental",
+        expected_source="UFP-SENSE, USL-Environmental-US",
         native_unit_of_measurement=LIGHT_LUX,
         device_class=SensorDeviceClass.ILLUMINANCE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    # Battery applies to all battery-powered devices; wired devices (UP-AirQuality)
+    # report percentage=null so they are naturally excluded by the null-value filter.
     ProtectSensorEntityDescription(
         key="battery",
         translation_key="battery",
         payload_field="batteryStatus.percentage",
-        expected_source="USL-Environmental",
+        expected_source="UFP-SENSE, USL-Environmental-US, USL-Entry-US",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    # ── UP-AirQuality sensors (airQuality.* fields) ─────────────────────────
     ProtectSensorEntityDescription(
         key="co2",
         translation_key="co2",
-        payload_field="stats.co2.value",
+        payload_field="airQuality.co2.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
         device_class=SensorDeviceClass.CO2,
@@ -90,7 +94,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
     ProtectSensorEntityDescription(
         key="pm1",
         translation_key="pm1",
-        payload_field="stats.pm1.value",
+        payload_field="airQuality.pm1p0.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -98,7 +102,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
     ProtectSensorEntityDescription(
         key="pm25",
         translation_key="pm25",
-        payload_field="stats.pm25.value",
+        payload_field="airQuality.pm2p5.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.PM25,
@@ -107,7 +111,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
     ProtectSensorEntityDescription(
         key="pm4",
         translation_key="pm4",
-        payload_field="stats.pm4.value",
+        payload_field="airQuality.pm4p0.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -115,7 +119,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
     ProtectSensorEntityDescription(
         key="pm10",
         translation_key="pm10",
-        payload_field="stats.pm10.value",
+        payload_field="airQuality.pm10p0.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.PM10,
@@ -124,21 +128,14 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
     ProtectSensorEntityDescription(
         key="voc_index",
         translation_key="voc_index",
-        payload_field="stats.voc.value",
-        expected_source="UP-AirQuality",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    ProtectSensorEntityDescription(
-        key="nox_index",
-        translation_key="nox_index",
-        payload_field="stats.nox.value",
+        payload_field="airQuality.voc.value",
         expected_source="UP-AirQuality",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     ProtectSensorEntityDescription(
         key="aqi",
         translation_key="aqi",
-        payload_field="stats.aqi.value",
+        payload_field="airQuality.aqi.value",
         expected_source="UP-AirQuality",
         device_class=SensorDeviceClass.AQI,
         state_class=SensorStateClass.MEASUREMENT,
@@ -146,7 +143,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
     ProtectSensorEntityDescription(
         key="vape_index",
         translation_key="vape_index",
-        payload_field="stats.vape.value",
+        payload_field="airQuality.vape.value",
         expected_source="UP-AirQuality",
         state_class=SensorStateClass.MEASUREMENT,
     ),
@@ -173,14 +170,17 @@ async def async_setup_entry(
         )
         device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
         for description in SENSOR_DESCRIPTIONS:
-            # Only create entities whose expected_source includes this device's type.
-            # An empty expected_source means the description applies to all devices.
+            # Filter by device type — empty expected_source means all devices.
             sources = [s.strip() for s in description.expected_source.split(",") if s.strip()]
-            if sources and not any(s.lower() in device_type.lower() or device_type.lower() in s.lower() for s in sources):
+            if sources and not any(
+                s.lower() in device_type.lower() or device_type.lower() in s.lower()
+                for s in sources
+            ):
                 continue
-            # Only create if the field is actually present in this device's payload.
-            # This avoids ghost entities for unsupported readings.
-            if get_nested(device, description.payload_field) is None:
+            # Create the entity only when the field key exists in the payload.
+            # We use key-existence (not value truthiness) so entities survive
+            # temporarily-null readings (e.g. a sensor that is rebooting).
+            if not field_exists(device, description.payload_field):
                 continue
             entities.append(UniFiProtectMetricSensor(coordinator, device_id, description))
 

@@ -19,7 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ProtectSensorsCoordinator
-from .helpers import get_nested
+from .helpers import field_exists, get_nested
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,23 +38,15 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ProtectBinarySensorEntityDescription, ...] = (
         translation_key="leak",
         # Protect uses a nullable timestamp (leakDetectedAt) not a boolean flag
         payload_field="leakDetectedAt",
-        expected_source="USL-Environmental",
+        expected_source="UFP-SENSE, USL-Environmental-US",
         device_class=BinarySensorDeviceClass.MOISTURE,
     ),
     ProtectBinarySensorEntityDescription(
         key="battery_low",
         translation_key="battery_low",
         payload_field="batteryStatus.isLow",
-        expected_source="USL-Environmental",
+        expected_source="UFP-SENSE, USL-Environmental-US, USL-Entry-US",
         device_class=BinarySensorDeviceClass.BATTERY,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    ProtectBinarySensorEntityDescription(
-        key="connectivity",
-        translation_key="connectivity",
-        payload_field="isConnected",
-        expected_source="USL-Environmental, UP-AirQuality",
-        device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ProtectBinarySensorEntityDescription(
@@ -62,13 +54,14 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ProtectBinarySensorEntityDescription, ...] = (
         translation_key="tamper",
         # Protect uses a nullable timestamp (tamperingDetectedAt) not a boolean flag
         payload_field="tamperingDetectedAt",
-        expected_source="USL-Environmental",
+        expected_source="UFP-SENSE, USL-Environmental-US",
         device_class=BinarySensorDeviceClass.TAMPER,
     ),
     ProtectBinarySensorEntityDescription(
         key="vape_detected",
         translation_key="vape_detected",
-        payload_field="stats.vapeDetected",
+        # Non-zero vape index means vape detected; 0 means clear
+        payload_field="airQuality.vape.value",
         expected_source="UP-AirQuality",
         device_class=None,
     ),
@@ -95,18 +88,15 @@ async def async_setup_entry(
         )
         device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
         for description in BINARY_SENSOR_DESCRIPTIONS:
-            # Only create entities whose expected_source includes this device's type.
+            # Filter by device type — empty expected_source means all devices.
             sources = [s.strip() for s in description.expected_source.split(",") if s.strip()]
-            if sources and not any(s.lower() in device_type.lower() or device_type.lower() in s.lower() for s in sources):
+            if sources and not any(
+                s.lower() in device_type.lower() or device_type.lower() in s.lower()
+                for s in sources
+            ):
                 continue
-            # For timestamp-based fields (leak, tamper), the key being present in the
-            # payload (even as null) means the device supports it. Check key existence
-            # rather than value truthiness.
-            field_parts = description.payload_field.split(".")
-            container = device
-            for part in field_parts[:-1]:
-                container = container.get(part, {}) if isinstance(container, dict) else {}
-            if not isinstance(container, dict) or field_parts[-1] not in container:
+            # Check key existence (not value), so entities survive null readings.
+            if not field_exists(device, description.payload_field):
                 continue
             entities.append(UniFiProtectBinarySensor(coordinator, device_id, description))
 

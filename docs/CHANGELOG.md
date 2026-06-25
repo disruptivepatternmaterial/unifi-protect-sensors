@@ -4,6 +4,34 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.4.0] — 2026-06-25
+
+### Fixed
+- **Root cause of all missing/ghost sensor issues**: switched the coordinator from the
+  `/proxy/protect/integration/v1/sensors` endpoint (which returns no device `type` and no
+  air-quality data) to `/proxy/protect/api/bootstrap` (which includes the `type` field and
+  a complete `airQuality` object for every sensor).
+- Corrected `expected_source` strings to match the actual device type values returned by the
+  bootstrap API: `UFP-SENSE`, `USL-Environmental-US`, `USL-Entry-US`, `UP-AirQuality`.
+- Fixed all UP-AirQuality payload field paths: CO₂, PM1/2.5/4/10, VOC index, AQI, and vape
+  index now read from `airQuality.*` instead of the non-existent `stats.*` paths.
+- Removed the `nox_index` sensor (not present in the UP-AirQuality API response).
+- Fixed `vape_detected` binary sensor to use `airQuality.vape.value` instead of the
+  non-existent `stats.vapeDetected` field.
+- Removed the `connectivity` binary sensor (the `available` entity property already reflects
+  coordinator health; the `state` field is not exposed as a binary sensor entity).
+- Entity creation now uses key-existence checks (`field_exists`) for both sensors and binary
+  sensors so entities are registered even when a reading is temporarily null.
+- Added `field_exists()` helper to `helpers.py`.
+
+### Changed
+- `expected_source` for temperature/humidity/illuminance/battery changed from
+  `USL-Environmental` → `UFP-SENSE, USL-Environmental-US` to match real device types.
+- Battery sensor `expected_source` now also includes `USL-Entry-US` (door sensors have batteries).
+- Test suite expanded from 32 → 46 tests; fixtures updated to match bootstrap API format.
+
+---
+
 ## [0.3.0] — 2026-06-25
 
 ### Fixed
