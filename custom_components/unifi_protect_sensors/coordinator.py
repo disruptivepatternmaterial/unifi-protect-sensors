@@ -34,6 +34,8 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         self._verify_ssl: bool = bool(entry_data.get("verify_ssl", False))
         self._base_url = f"https://{self._host}:{self._port}"
         self._session_cookie: str | None = None
+        # ssl=False disables verification; ssl=None uses the default context (verifies)
+        self._ssl: bool | None = None if self._verify_ssl else False
 
     async def _async_login(self) -> str:
         """Authenticate and return the TOKEN cookie value."""
@@ -42,7 +44,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             async with session.post(
                 f"{self._base_url}{_LOGIN_PATH}",
                 json={"username": self._username, "password": self._password},
-                ssl=self._verify_ssl or None,
+                ssl=self._ssl,
             ) as resp:
                 if resp.status not in (200, 201):
                     raise UpdateFailed(f"Login failed with HTTP {resp.status}")
@@ -71,7 +73,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             async with session.get(
                 f"{self._base_url}{_SENSORS_PATH}",
                 headers=headers,
-                ssl=self._verify_ssl or None,
+                ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
                     # Session expired; clear token so next poll re-authenticates

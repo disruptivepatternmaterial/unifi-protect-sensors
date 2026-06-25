@@ -28,15 +28,20 @@ _SENSORS_PATH = "/proxy/protect/integration/v1/sensors"
 
 async def _async_validate_credentials(hass, host: str, port: int, username: str, password: str, api_key: str, verify_ssl: bool) -> str | None:
     """Try to reach the console and authenticate. Returns error key or None on success."""
+    import aiohttp
+
     base_url = f"https://{host}:{port}"
+    # ssl=False disables verification; ssl=None uses the default context (verifies)
+    ssl = None if verify_ssl else False
     session = async_get_clientsession(hass, verify_ssl=verify_ssl)
+    timeout = aiohttp.ClientTimeout(total=10)
     try:
         if api_key:
             async with session.get(
                 f"{base_url}{_SENSORS_PATH}",
                 headers={"Authorization": f"Bearer {api_key}"},
-                ssl=verify_ssl or None,
-                timeout=10,
+                ssl=ssl,
+                timeout=timeout,
             ) as resp:
                 if resp.status == 401:
                     return "invalid_api_key"
@@ -46,8 +51,8 @@ async def _async_validate_credentials(hass, host: str, port: int, username: str,
             async with session.post(
                 f"{base_url}{_LOGIN_PATH}",
                 json={"username": username, "password": password},
-                ssl=verify_ssl or None,
-                timeout=10,
+                ssl=ssl,
+                timeout=timeout,
             ) as resp:
                 if resp.status == 401:
                     return "invalid_auth"
@@ -110,15 +115,11 @@ class UniFiProtectSensorsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
-        return UniFiProtectSensorsOptionsFlow(config_entry)
+        return UniFiProtectSensorsOptionsFlow()
 
 
 class UniFiProtectSensorsOptionsFlow(config_entries.OptionsFlow):
     """Handle options for UniFi Protect Sensors."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self._config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -133,7 +134,7 @@ class UniFiProtectSensorsOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_VERIFY_SSL,
-                        default=self._config_entry.options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+                        default=self.config_entry.options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
                     ): bool,
                 }
             ),

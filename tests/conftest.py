@@ -15,15 +15,8 @@ import pytest
 # Minimal Home Assistant stubs (used when homeassistant is not installed)
 # ---------------------------------------------------------------------------
 
-def _ha_available() -> bool:
-    try:
-        import homeassistant.components.sensor  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
 def _install_ha_stubs() -> None:
+    """Always inject stubs — unit tests must not depend on a live HA install."""
     """Inject dataclass-compatible HA stubs into sys.modules.
 
     When homeassistant is not installed we create lightweight stand-ins that
@@ -187,8 +180,7 @@ def _install_ha_stubs() -> None:
     sys.modules.update(stubs)
 
 
-if not _ha_available():
-    _install_ha_stubs()
+_install_ha_stubs()
 
 
 # ---------------------------------------------------------------------------
