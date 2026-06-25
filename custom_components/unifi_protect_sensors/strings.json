@@ -3,24 +3,42 @@
     "step": {
       "user": {
         "title": "Set up UniFi Protect Sensors",
-        "description": "Enter your UniFi Protect console details. A local user account (not a Ubiquiti cloud/SSO account) is required.",
+        "description": "Enter your UniFi Protect console details. Use an API key (recommended) or a local user account — Ubiquiti cloud/SSO accounts are not supported.",
         "data": {
           "host": "Host",
           "port": "Port",
           "username": "Username",
           "password": "Password",
-          "api_key": "API Key (optional but recommended)",
-          "verify_ssl": "Verify SSL"
+          "api_key": "API Key (preferred)",
+          "verify_ssl": "Verify SSL Certificate"
+        },
+        "data_description": {
+          "api_key": "Generate in the Protect web UI under System → API Keys. Leave blank to use username/password instead.",
+          "verify_ssl": "Enable only if your console has a valid TLS certificate. Most UniFi devices use self-signed certificates."
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to UniFi Protect console",
-      "invalid_auth": "Invalid credentials or API key",
-      "unknown": "Unexpected error — check the Home Assistant logs"
+      "cannot_connect": "Cannot connect to the UniFi Protect console. Check the host, port, and SSL setting.",
+      "invalid_auth": "Invalid username or password.",
+      "invalid_api_key": "Invalid API key. Verify the key in the Protect console under System → API Keys.",
+      "unknown": "Unexpected error — check the Home Assistant logs for details."
     },
     "abort": {
-      "already_configured": "This device is already configured"
+      "already_configured": "This console is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "UniFi Protect Sensors Options",
+        "data": {
+          "verify_ssl": "Verify SSL Certificate"
+        },
+        "data_description": {
+          "verify_ssl": "Enable only if your console has a valid TLS certificate."
+        }
+      }
     }
   },
   "entity": {

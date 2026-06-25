@@ -6,7 +6,6 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import ProtectSensorsCoordinator
@@ -18,10 +17,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up UniFi Protect Sensors from a config entry."""
     coordinator = ProtectSensorsCoordinator(hass, dict(entry.data))
 
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        raise ConfigEntryNotReady(f"Unable to connect to Protect console: {err}") from err
+    # async_config_entry_first_refresh raises ConfigEntryNotReady on failure;
+    # let it propagate directly so the original error message is preserved.
+    await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 

@@ -1,13 +1,12 @@
 {
   "domain": "unifi_protect_sensors",
   "name": "UniFi Protect Sensors",
-  "after_dependencies": ["unifiprotect"],
   "codeowners": [],
   "config_flow": true,
   "documentation": "https://github.com/disruptivepatternmaterial/unifi-protect-sensors",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/disruptivepatternmaterial/unifi-protect-sensors/issues",
-  "requirements": ["uiprotect>=14.0.0"],
+  "requirements": [],
   "version": "0.1.0"
 }

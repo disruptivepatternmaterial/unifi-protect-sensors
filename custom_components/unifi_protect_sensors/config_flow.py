@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -28,8 +29,6 @@ _SENSORS_PATH = "/proxy/protect/integration/v1/sensors"
 
 async def _async_validate_credentials(hass, host: str, port: int, username: str, password: str, api_key: str, verify_ssl: bool) -> str | None:
     """Try to reach the console and authenticate. Returns error key or None on success."""
-    import aiohttp
-
     base_url = f"https://{host}:{port}"
     # ssl=False disables verification; ssl=None uses the default context (verifies)
     ssl = None if verify_ssl else False
