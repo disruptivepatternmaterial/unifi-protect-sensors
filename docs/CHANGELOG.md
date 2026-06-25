@@ -4,6 +4,19 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.3.0] — 2026-06-25
+
+### Fixed
+- Entities are now created only for descriptions whose `expected_source` matches the
+  device type — eliminates ghost sensors (e.g. CO₂, AQI, vape on a USL-Environmental).
+- Binary sensor creation now checks key presence in the payload rather than value
+  truthiness, so null-valued fields (leakDetectedAt, tamperingDetectedAt) are
+  correctly registered on supported devices.
+- Coordinator now logs the device list and types at DEBUG level on every poll,
+  making it easy to confirm which devices are returned by the API.
+
+---
+
 ## [0.2.0] — 2026-06-25
 
 ### Added

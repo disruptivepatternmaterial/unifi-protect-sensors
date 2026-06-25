@@ -171,11 +171,17 @@ async def async_setup_entry(
             model=device.get("type") or device.get("modelKey"),
             manufacturer="Ubiquiti",
         )
+        device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
         for description in SENSOR_DESCRIPTIONS:
-            # Create entities for all descriptions; native_value returns None when
-            # the field is absent (device doesn't support that reading). This avoids
-            # entities being permanently missing when a field happens to be null
-            # at startup (e.g. sensor warming up).
+            # Only create entities whose expected_source includes this device's type.
+            # An empty expected_source means the description applies to all devices.
+            sources = [s.strip() for s in description.expected_source.split(",") if s.strip()]
+            if sources and not any(s.lower() in device_type.lower() or device_type.lower() in s.lower() for s in sources):
+                continue
+            # Only create if the field is actually present in this device's payload.
+            # This avoids ghost entities for unsupported readings.
+            if get_nested(device, description.payload_field) is None:
+                continue
             entities.append(UniFiProtectMetricSensor(coordinator, device_id, description))
 
     async_add_entities(entities)
