@@ -1,7 +1,7 @@
 {
   "id": "abc123",
   "modelKey": "sensor",
-  "type": "USL-Environmental",
+  "type": "USL-Environmental-US",
   "name": "Environmental Sensor",
   "state": "CONNECTED",
   "mac": "AA:BB:CC:DD:EE:FF",
@@ -10,7 +10,6 @@
     "percentage": 85,
     "isLow": false
   },
-  "isConnected": true,
   "isMotionDetected": false,
   "leakDetectedAt": null,
   "tamperingDetectedAt": null,
@@ -18,6 +17,19 @@
     "temperature": { "value": 22.5, "status": "safe" },
     "humidity": { "value": 48.0, "status": "safe" },
     "light": { "value": 120.0, "status": "safe" }
+  },
+  "airQuality": {
+    "aqi": { "value": null, "status": "unknown" },
+    "vape": { "value": null, "status": "unknown" },
+    "tvoc": { "value": null, "status": "unknown" },
+    "pm1p0": { "value": null, "status": "unknown" },
+    "pm2p5": { "value": null, "status": "unknown" },
+    "pm4p0": { "value": null, "status": "unknown" },
+    "pm10p0": { "value": null, "status": "unknown" },
+    "humidity": { "value": null, "status": "unknown" },
+    "temperature": { "value": null, "status": "unknown" },
+    "voc": { "value": null, "status": "unknown" },
+    "co2": { "value": null, "status": "unknown" }
   },
   "temperatureSettings": { "isEnabled": true, "lowThreshold": 0, "highThreshold": 40, "margin": 1 },
   "humiditySettings": { "isEnabled": true, "lowThreshold": 10, "highThreshold": 90, "margin": 2 },

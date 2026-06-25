@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 _LOGGER = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL = timedelta(seconds=30)
-_SENSORS_PATH = "/proxy/protect/integration/v1/sensors"
+_BOOTSTRAP_PATH = "/proxy/protect/api/bootstrap"
 _LOGIN_PATH = "/api/auth/login"
 
 
@@ -71,7 +71,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
         try:
             async with session.get(
-                f"{self._base_url}{_SENSORS_PATH}",
+                f"{self._base_url}{_BOOTSTRAP_PATH}",
                 headers=headers,
                 ssl=self._ssl,
             ) as resp:
@@ -80,19 +80,19 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     self._session_cookie = None
                     raise UpdateFailed("Session expired; will re-authenticate on next update")
                 if resp.status != 200:
-                    raise UpdateFailed(f"Sensors endpoint returned HTTP {resp.status}")
+                    raise UpdateFailed(f"Bootstrap endpoint returned HTTP {resp.status}")
                 payload: Any = await resp.json()
         except UpdateFailed:
             raise
         except Exception as err:
             raise UpdateFailed(f"Cannot reach Protect console: {err}") from err
 
-        if isinstance(payload, list):
-            result = {d["id"]: d for d in payload if isinstance(d, dict) and "id" in d}
-        elif isinstance(payload, dict) and isinstance(payload.get("data"), list):
-            result = {d["id"]: d for d in payload["data"] if isinstance(d, dict) and "id" in d}
-        else:
-            raise UpdateFailed(f"Unexpected sensors payload shape: {type(payload).__name__}")
+        if not isinstance(payload, dict):
+            raise UpdateFailed(f"Unexpected bootstrap payload type: {type(payload).__name__}")
+        sensors_list = payload.get("sensors", [])
+        if not isinstance(sensors_list, list):
+            raise UpdateFailed("Bootstrap payload missing 'sensors' list")
+        result = {d["id"]: d for d in sensors_list if isinstance(d, dict) and "id" in d}
 
         _LOGGER.debug(
             "Protect sensors response: %d device(s) — %s",

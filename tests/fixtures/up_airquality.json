@@ -4,20 +4,31 @@
   "type": "UP-AirQuality",
   "name": "Air Quality Sensor",
   "state": "CONNECTED",
-  "mac": "11:22:33:44:55:66",
-  "isConnected": true,
+  "mac": "74F92CA88F38",
+  "mountType": "none",
+  "batteryStatus": {
+    "percentage": null,
+    "isLow": false
+  },
+  "isMotionDetected": false,
+  "leakDetectedAt": null,
+  "tamperingDetectedAt": null,
   "stats": {
-    "temperature": { "value": 21.0, "status": "safe" },
-    "humidity": { "value": 52.0, "status": "safe" },
-    "co2": { "value": 430, "status": "safe" },
-    "pm1": { "value": 3.2, "status": "safe" },
-    "pm25": { "value": 6.1, "status": "safe" },
-    "pm4": { "value": 7.0, "status": "safe" },
-    "pm10": { "value": 8.5, "status": "safe" },
-    "voc": { "value": 100, "status": "safe" },
-    "nox": { "value": 1, "status": "safe" },
-    "aqi": { "value": 22, "status": "safe" },
+    "temperature": { "value": null, "status": "unknown" },
+    "humidity": { "value": null, "status": "unknown" },
+    "light": { "value": null, "status": "unknown" }
+  },
+  "airQuality": {
+    "aqi": { "value": 22, "status": "neutral" },
     "vape": { "value": 0, "status": "safe" },
-    "vapeDetected": false
+    "tvoc": { "value": 150.8, "status": "neutral" },
+    "pm1p0": { "value": 0.0, "status": "neutral" },
+    "pm2p5": { "value": 0.0, "status": "neutral" },
+    "pm4p0": { "value": 0.1, "status": "neutral" },
+    "pm10p0": { "value": 0.1, "status": "neutral" },
+    "humidity": { "value": null, "status": "unknown" },
+    "temperature": { "value": null, "status": "unknown" },
+    "voc": { "value": 118, "status": "neutral" },
+    "co2": { "value": 694, "status": "neutral" }
   }
 }
