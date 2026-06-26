@@ -3,12 +3,18 @@
 Data flows through two channels:
 
 * **Bootstrap (REST)** — ``/proxy/protect/api/bootstrap`` gives a complete
-  snapshot of every sensor. It is fetched on startup and re-fetched on a slow
-  interval to self-heal any missed updates.
+  snapshot of every sensor. It is fetched every 30 seconds, guaranteeing that
+  every sensor's ``last_updated`` timestamp stays fresh in Home Assistant even
+  when a sensor is in a stable room and no WebSocket delta arrives.
 * **WebSocket (push)** — ``/proxy/protect/ws/updates`` streams real-time deltas
-  for each device. These deltas are merged into the snapshot so battery-powered
-  environmental sensors update the instant they report, instead of waiting for
-  the next REST poll.
+  for each device. These deltas are merged into the snapshot between polls so
+  that changing values appear immediately without waiting for the next REST poll.
+
+Important: WebSocket updates must NOT call ``async_set_updated_data`` because
+that method resets the coordinator's scheduled refresh timer, which would
+prevent the 30-second bootstrap poll from ever running when the WS is active.
+Instead, WS updates mutate ``self.data`` in place and call
+``async_update_listeners()`` to push the change to entity callbacks.
 """
 
 from __future__ import annotations
@@ -27,8 +33,9 @@ from .protect_ws import decode_ws_message
 
 _LOGGER = logging.getLogger(__name__)
 
-# Bootstrap is now a slow self-healing resync; the WebSocket carries live data.
-_UPDATE_INTERVAL = timedelta(minutes=5)
+# Bootstrap runs every 30 s so that stable-room sensors stay fresh in HA.
+# WebSocket delivers changes immediately between polls.
+_UPDATE_INTERVAL = timedelta(seconds=30)
 _BOOTSTRAP_PATH = "/proxy/protect/api/bootstrap"
 _LOGIN_PATH = "/api/auth/login"
 _WS_PATH = "/proxy/protect/ws/updates"
@@ -204,9 +211,8 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
 
         if verb == "remove":
             if device_id in data:
-                new_data = dict(data)
-                new_data.pop(device_id, None)
-                self.async_set_updated_data(new_data)
+                data.pop(device_id, None)
+                self.async_update_listeners()
             return
 
         if verb == "add":
@@ -223,10 +229,10 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             self.hass.async_create_task(self.async_request_refresh())
             return
 
-        merged = deep_merge(dict(existing), message.data)
-        new_data = dict(data)
-        new_data[device_id] = merged
-        self.async_set_updated_data(new_data)
+        # Mutate data in place and notify listeners WITHOUT resetting the
+        # coordinator's scheduled refresh timer (unlike async_set_updated_data).
+        deep_merge(existing, message.data)
+        self.async_update_listeners()
 
     async def async_shutdown(self) -> None:
         """Cancel the WebSocket listener and run base shutdown."""

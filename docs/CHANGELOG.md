@@ -4,6 +4,23 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.5.1] — 2026-06-26
+
+### Fixed
+- **Sensors in stable rooms never refreshed in HA** — `async_set_updated_data`
+  (used for WebSocket updates) resets the coordinator's scheduled resync timer
+  each time it's called. With the AQ sensor sending WS messages every ~30 s,
+  the 5-minute bootstrap resync never actually ran, so any sensor that hadn't
+  received a WS delta since startup had a permanently stale `last_updated`
+  timestamp in HA.
+- Fixed by switching WS updates to mutate `self.data` in place and call
+  `async_update_listeners()` directly, which notifies entity callbacks without
+  touching the schedule.
+- Bootstrap interval restored to **30 seconds** (matching original behaviour)
+  so every sensor's `last_updated` stays fresh in HA even in stable rooms.
+
+---
+
 ## [0.5.0] — 2026-06-25
 
 ### Added
