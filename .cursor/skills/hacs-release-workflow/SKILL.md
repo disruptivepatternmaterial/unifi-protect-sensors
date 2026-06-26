@@ -41,6 +41,17 @@ ssh ntableman@192.168.10.223 "grep GITHUB_TOKEN ~/.zprofile | cut -d= -f2 | tr -
 Token (long-lived): `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyMzMyZGY5Y2MzODA0YjJkYjk2Zjc2ZDJlZmNjMjgyNiIsImlhdCI6MTc3ODk0Mzk2NSwiZXhwIjoyMDk0MzAzOTY1fQ.HEPqycmEKmZOCLIwc9Da33ml06I2wp6PmyWgltDE6h0`
 Base URL: `http://192.168.70.30:8123`
 
+## MANDATORY: Before Every Release
+
+**UPDATE THESE FILES EVERY TIME — NO EXCEPTIONS:**
+
+1. `README.md` — verify all device tables, docs on update mechanism/polling, requirements, and test instructions match the current code exactly.
+2. `docs/ENTITIES.md` — verify all entity keys, API field paths (`airQuality.*` vs `stats.*`), device model names, and notes match the current `sensor.py` / `binary_sensor.py` SENSOR_DESCRIPTIONS.
+3. `docs/CHANGELOG.md` — add a section for the new version with complete change notes.
+4. `custom_components/unifi_protect_sensors/manifest.json` — bump `version`.
+
+Do **not** `git commit` until all four files are updated and accurate. A release with stale docs is worse than no docs.
+
 ## Release Checklist (run in order, all via SSH or curl)
 
 ```
