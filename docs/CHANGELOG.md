@@ -4,6 +4,16 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.5.3] — 2026-06-26
+
+### Fixed
+- **Missing Temperature and Humidity on UP-AirQuality** — the device exposes these
+  readings in `airQuality.temperature` and `airQuality.humidity` (not `stats.*`),
+  but no sensor descriptions existed for those paths. Two new descriptions added:
+  `aq_temperature` and `aq_humidity` with `expected_source="UP-AirQuality"`.
+
+---
+
 ## [0.5.2] — 2026-06-26
 
 ### Fixed (adversarial review findings)

@@ -82,6 +82,27 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     # ── UP-AirQuality sensors (airQuality.* fields) ─────────────────────────
+    # Temperature and humidity on UP-AirQuality live in airQuality.*, not stats.*
+    ProtectSensorEntityDescription(
+        key="aq_temperature",
+        translation_key="temperature",
+        payload_field="airQuality.temperature.value",
+        expected_source="UP-AirQuality",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+    ),
+    ProtectSensorEntityDescription(
+        key="aq_humidity",
+        translation_key="humidity",
+        payload_field="airQuality.humidity.value",
+        expected_source="UP-AirQuality",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.HUMIDITY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
     ProtectSensorEntityDescription(
         key="co2",
         translation_key="co2",

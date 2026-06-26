@@ -111,7 +111,9 @@ class TestSensorDescriptions:
     def test_expected_sensor_keys_present(self):
         descs = self._import()
         keys = {d.key for d in descs}
-        required = {"temperature", "humidity", "illuminance", "battery", "co2", "pm25", "pm10", "aqi"}
+        required = {"temperature", "humidity", "illuminance", "battery",
+                    "aq_temperature", "aq_humidity",
+                    "co2", "pm25", "pm10", "aqi"}
         missing = required - keys
         assert not missing, f"Missing expected sensor keys: {missing}"
 
@@ -171,7 +173,7 @@ class TestSensorDescriptions:
             assert field_exists(aq_device, desc.payload_field), (
                 f"Field path '{desc.payload_field}' for '{desc.key}' not found in AQ fixture"
             )
-            if desc.key in ("co2", "pm25", "pm10", "aqi", "voc_index"):
+            if desc.key in ("aq_temperature", "aq_humidity", "co2", "pm25", "pm10", "aqi", "voc_index"):
                 result = get_nested(aq_device, desc.payload_field)
                 assert result is not None, (
                     f"Expected non-null value for '{desc.key}' in AQ fixture "

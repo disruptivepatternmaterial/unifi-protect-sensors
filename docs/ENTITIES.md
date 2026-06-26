@@ -19,6 +19,8 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 | `humidity` | `humidity` | % | `stats.humidity.value` | UFP-SENSE, USL-Environmental-US |
 | `illuminance` | `illuminance` | lx | `stats.light.value` | UFP-SENSE, USL-Environmental-US |
 | `battery` | `battery` | % | `batteryStatus.percentage` | UFP-SENSE, USL-Environmental-US, USL-Entry-US |
+| `aq_temperature` | `temperature` | °C | `airQuality.temperature.value` | UP-AirQuality |
+| `aq_humidity` | `humidity` | % | `airQuality.humidity.value` | UP-AirQuality |
 | `co2` | `carbon_dioxide` | ppm | `airQuality.co2.value` | UP-AirQuality |
 | `pm1` | — | µg/m³ | `airQuality.pm1p0.value` | UP-AirQuality |
 | `pm25` | `pm25` | µg/m³ | `airQuality.pm2p5.value` | UP-AirQuality |

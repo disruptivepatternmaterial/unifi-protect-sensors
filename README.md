@@ -12,7 +12,7 @@ that update in real time.
 | **UFP-SENSE** | Temperature, Humidity, Illuminance, Battery, Leak, Tamper, Battery Low |
 | **USL-Environmental-US** | Temperature, Humidity, Illuminance, Battery, Leak, Tamper, Battery Low |
 | **USL-Entry-US** (door/entry) | Battery, Battery Low |
-| **UP-AirQuality** | CO₂, PM1, PM2.5, PM4, PM10, VOC Index, AQI, Vape Index, Vape Detected |
+| **UP-AirQuality** | Temperature, Humidity, CO₂, PM1, PM2.5, PM4, PM10, VOC Index, AQI, Vape Index, Vape Detected |
 
 ## Installation (HACS)
 
