@@ -26,8 +26,8 @@
     "pm2p5": { "value": 0.0, "status": "neutral" },
     "pm4p0": { "value": 0.1, "status": "neutral" },
     "pm10p0": { "value": 0.1, "status": "neutral" },
-    "humidity": { "value": null, "status": "unknown" },
-    "temperature": { "value": null, "status": "unknown" },
+    "humidity": { "value": 46.63, "status": "neutral" },
+    "temperature": { "value": 24.34, "status": "neutral" },
     "voc": { "value": 118, "status": "neutral" },
     "co2": { "value": 694, "status": "neutral" }
   }
