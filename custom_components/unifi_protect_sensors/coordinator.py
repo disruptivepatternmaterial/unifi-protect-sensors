@@ -24,6 +24,8 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+import aiohttp
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -170,7 +172,13 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                 backoff = min(backoff * 2, _WS_BACKOFF_MAX)
 
     async def _ws_connect_and_listen(self) -> None:
-        """Open one WebSocket connection and process messages until it closes."""
+        """Open one WebSocket connection and process messages until it closes.
+
+        Raises on both normal and abnormal closure so that ``_ws_loop`` always
+        applies backoff before reconnecting — preventing a hot reconnect loop when
+        the server accepts then immediately closes (e.g. stale lastUpdateId, expired
+        token delivered via a close frame).
+        """
         headers = await self._async_auth_headers()
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
 
@@ -178,14 +186,29 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         if self._last_update_id:
             url = f"{url}?lastUpdateId={self._last_update_id}"
 
-        async with session.ws_connect(url, headers=headers, ssl=self._ssl, heartbeat=30) as ws:
-            _LOGGER.debug("Protect WebSocket connected")
-            async for msg in ws:
-                if msg.type.name in ("CLOSE", "CLOSING", "CLOSED", "ERROR"):
-                    break
-                if msg.type.name != "BINARY":
-                    continue
-                self._handle_ws_message(msg.data)
+        try:
+            async with session.ws_connect(url, headers=headers, ssl=self._ssl, heartbeat=30) as ws:
+                _LOGGER.debug("Protect WebSocket connected")
+                async for msg in ws:
+                    if msg.type in (
+                        aiohttp.WSMsgType.CLOSE,
+                        aiohttp.WSMsgType.CLOSING,
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        raise ConnectionError(f"WebSocket closed by server: {msg.data}")
+                    if msg.type != aiohttp.WSMsgType.BINARY:
+                        continue
+                    self._handle_ws_message(msg.data)
+                # Loop ended without a close frame — treat as server-initiated close.
+                raise ConnectionError("WebSocket connection ended unexpectedly")
+        except aiohttp.WSServerHandshakeError as err:
+            # Auth failure during WS upgrade — invalidate cookie so the next attempt
+            # triggers a fresh login instead of retrying a dead token.
+            if err.status in (401, 403):
+                _LOGGER.debug("Protect WebSocket auth failed (%d); clearing session cookie", err.status)
+                self._session_cookie = None
+            raise
 
     def _handle_ws_message(self, raw: bytes) -> None:
         """Decode one WS message and merge it into the current snapshot."""
@@ -196,6 +219,12 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             return
 
         action = message.action
+
+        # Advance the cursor for ALL models before filtering — non-sensor frames
+        # also carry newUpdateId and skipping them causes a stale cursor on reconnect.
+        if action.get("newUpdateId"):
+            self._last_update_id = action["newUpdateId"]
+
         if action.get("modelKey") != "sensor":
             return
 
@@ -204,8 +233,6 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             return
 
         verb = action.get("action")
-        if action.get("newUpdateId"):
-            self._last_update_id = action["newUpdateId"]
 
         data = self.data or {}
 

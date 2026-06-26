@@ -4,6 +4,34 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.5.2] — 2026-06-26
+
+### Fixed (adversarial review findings)
+- **Reconnect busy-loop on server-initiated WS close**: `_ws_connect_and_listen`
+  now raises `ConnectionError` whenever the connection ends (normal or abnormal),
+  so `_ws_loop` always applies exponential backoff before reconnecting. Previously
+  a graceful server close reset backoff to zero, causing a hot reconnect loop.
+- **Stale session cookie after WS auth failure**: `WSServerHandshakeError` with
+  status 401/403 now clears `_session_cookie` before backing off, so the next
+  reconnect triggers a fresh login instead of retrying a dead token indefinitely.
+- **Unbounded `zlib` decompression (memory amplification)**: Frame decompression
+  now uses `zlib.decompressobj` with a 10 MB cap and raises `ValueError` if the
+  limit is exceeded, preventing memory/CPU amplification from malicious frames.
+- **Frame `packet_type` not validated**: `decode_ws_message` now asserts that
+  frame 1 is an action frame (type 1) and frame 2 is a data frame (type 2),
+  rejecting out-of-order or malformed frame sequences.
+- **WS cursor stale after reconnect**: `_last_update_id` is now advanced from
+  `newUpdateId` for *all* model types before the `modelKey == "sensor"` filter,
+  so non-sensor frames no longer leave the cursor behind on reconnect.
+- WS message type comparisons switched from fragile `msg.type.name` strings to
+  `aiohttp.WSMsgType` enum constants.
+
+### Changed
+- 61 tests passing (up from 58); new tests cover frame type validation, zlib size
+  cap, and type-wrong-order rejection.
+
+---
+
 ## [0.5.1] — 2026-06-26
 
 ### Fixed
