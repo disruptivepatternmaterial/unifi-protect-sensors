@@ -1,13 +1,17 @@
 # UniFi Protect Sensors — Home Assistant Integration
 
-A custom Home Assistant integration that polls the UniFi Protect `/proxy/protect/integration/v1/sensors` endpoint and exposes environmental and air-quality sensor data as native HA entities.
+A custom Home Assistant integration that reads UniFi Protect sensor data from the
+console's `/proxy/protect/api/bootstrap` snapshot and the `/proxy/protect/ws/updates`
+WebSocket stream, exposing environmental and air-quality readings as native HA entities
+that update in real time.
 
 ## Supported Devices
 
 | Model | Sensors |
 |---|---|
-| **USL-Environmental** | Temperature, Humidity, Illuminance, Battery, Leak, Tamper, Connectivity, Battery Low |
-| **UP-AirQuality** | Temperature, Humidity, CO₂, PM1, PM2.5, PM4, PM10, VOC Index, NOx Index, AQI, Vape Index, Vape Detected, Connectivity |
+| **UFP-SENSE / USL-Environmental-US** | Temperature, Humidity, Illuminance, Battery, Leak, Tamper, Battery Low |
+| **USL-Entry-US** (door/entry) | Battery, Battery Low |
+| **UP-AirQuality** | CO₂, PM1, PM2.5, PM4, PM10, VOC Index, AQI, Vape Index, Vape Detected |
 
 ## Installation (HACS)
 
@@ -36,9 +40,18 @@ A custom Home Assistant integration that polls the UniFi Protect `/proxy/protect
 
 **Username / Password**: The integration performs a cookie-based login to `/api/auth/login`. The `TOKEN` cookie is stored in memory and refreshed automatically on 401 responses.
 
-## Poll Interval
+## Updates & Polling
 
-Sensor data is fetched every **30 seconds** (`local_polling` class).
+The integration uses two channels:
+
+- **WebSocket (real time)** — live device deltas are streamed from
+  `/proxy/protect/ws/updates` and applied immediately, so readings update the moment
+  a sensor reports.
+- **Bootstrap resync (every 5 minutes)** — a full snapshot is re-fetched on a slow
+  interval to self-heal any missed events.
+
+The WebSocket reconnects automatically with exponential backoff and re-authenticates
+on session expiry.
 
 ## Entity Reference
 

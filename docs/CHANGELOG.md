@@ -4,6 +4,31 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.5.0] — 2026-06-25
+
+### Added
+- **Real-time WebSocket updates.** The coordinator now subscribes to the Protect
+  event stream (`/proxy/protect/ws/updates`) and merges live deltas into the device
+  snapshot, so battery-powered environmental sensors update the instant they report
+  instead of waiting for a REST poll. This matches the behaviour of the official
+  UniFi Protect integration.
+- `protect_ws.py` — a dependency-free decoder for Protect's binary WebSocket frame
+  format (8-byte header + JSON payload, with zlib-deflate support).
+- `deep_merge()` helper for applying partial WebSocket deltas onto the snapshot.
+
+### Changed
+- Bootstrap polling is now a slow self-healing resync (every 5 minutes) rather than
+  the primary data path; the WebSocket carries live data between resyncs.
+- Coordinator gracefully reconnects the WebSocket with exponential backoff and
+  re-authenticates on session expiry. The listener is cleanly cancelled on unload.
+
+### Notes
+- No new Python dependencies — the WebSocket client uses Home Assistant's bundled
+  aiohttp session.
+- Test suite expanded to 58 tests (WS frame decoding + deep-merge coverage).
+
+---
+
 ## [0.4.0] — 2026-06-25
 
 ### Fixed

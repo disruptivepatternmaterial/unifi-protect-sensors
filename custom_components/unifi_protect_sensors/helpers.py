@@ -24,3 +24,18 @@ def field_exists(data: dict, path: str) -> bool:
             return False
         cur = cur[key]
     return isinstance(cur, dict) and keys[-1] in cur
+
+
+def deep_merge(base: dict, delta: dict) -> dict:
+    """Recursively merge ``delta`` into ``base`` in place and return ``base``.
+
+    Nested dicts are merged key-by-key; any non-dict value in ``delta`` (including
+    None and lists) overwrites the corresponding value in ``base``. This mirrors
+    how UniFi Protect WebSocket deltas patch a device snapshot.
+    """
+    for key, value in delta.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
