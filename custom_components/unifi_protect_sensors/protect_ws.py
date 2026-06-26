@@ -27,6 +27,10 @@ from typing import Any, NamedTuple
 
 _HEADER_LEN = 8
 
+# Safety cap on decompressed frame size (10 MB). Prevents memory amplification
+# attacks if a compromised LAN host sends a crafted zlib bomb.
+_MAX_DECOMPRESSED_BYTES = 10 * 1024 * 1024
+
 # Packet type markers (header byte 0)
 PACKET_TYPE_ACTION = 1
 PACKET_TYPE_PAYLOAD = 2
@@ -70,7 +74,12 @@ def _decode_frame(buffer: bytes, offset: int) -> tuple[ProtectFrame, int]:
 
     payload = buffer[start:end]
     if deflated:
-        payload = zlib.decompress(payload)
+        dec = zlib.decompressobj()
+        payload = dec.decompress(payload, _MAX_DECOMPRESSED_BYTES)
+        if dec.unconsumed_tail:
+            raise ValueError(
+                f"Decompressed frame exceeds {_MAX_DECOMPRESSED_BYTES // (1024 * 1024)} MB limit"
+            )
 
     return ProtectFrame(packet_type, payload_format, deflated, payload), end
 
@@ -92,6 +101,15 @@ def decode_ws_message(buffer: bytes) -> ProtectWSMessage:
     """
     action_frame, offset = _decode_frame(buffer, 0)
     data_frame, _ = _decode_frame(buffer, offset)
+
+    if action_frame.packet_type != PACKET_TYPE_ACTION:
+        raise ValueError(
+            f"Expected action frame (type {PACKET_TYPE_ACTION}), got type {action_frame.packet_type}"
+        )
+    if data_frame.packet_type != PACKET_TYPE_PAYLOAD:
+        raise ValueError(
+            f"Expected data frame (type {PACKET_TYPE_PAYLOAD}), got type {data_frame.packet_type}"
+        )
 
     action = _payload_to_obj(action_frame)
     data = _payload_to_obj(data_frame)

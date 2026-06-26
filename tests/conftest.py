@@ -161,6 +161,24 @@ def _install_ha_stubs() -> None:
     ha_core.HomeAssistant = MagicMock
     ha_core.callback = lambda fn: fn  # passthrough decorator
 
+    # --- aiohttp stub (WSMsgType used in coordinator.py) ---
+    # Only stub if the real package is not available; tests don't exercise WS directly.
+    if "aiohttp" not in sys.modules:
+        import enum
+
+        class _WSMsgType(enum.IntEnum):
+            BINARY = 2
+            TEXT = 1
+            CLOSE = 8
+            CLOSING = 9
+            CLOSED = 10
+            ERROR = 258
+
+        aiohttp_stub = MagicMock()
+        aiohttp_stub.WSMsgType = _WSMsgType
+        aiohttp_stub.WSServerHandshakeError = type("WSServerHandshakeError", (Exception,), {"status": None})
+        sys.modules["aiohttp"] = aiohttp_stub
+
     stubs: dict[str, Any] = {
         "homeassistant": MagicMock(),
         "homeassistant.core": ha_core,

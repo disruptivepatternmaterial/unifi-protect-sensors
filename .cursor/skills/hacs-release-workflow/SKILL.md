@@ -1,120 +1,143 @@
----
-name: hacs-release-workflow
-description: Release workflow for the unifi-protect project. Use when asked to push changes, cut versions, create tags, publish GitHub releases, or ship HACS updates. Includes mounted-volume path rules, SSH fallback host usage, and mandatory README/docs/changelog updates for every release.
----
+# SKILL: unifi-protect-sensors Release & Operations Workflow
 
-# HACS Release Workflow
+## Repository
+- **GitHub**: `git@github.com:disruptivepatternmaterial/unifi-protect-sensors.git`
+- **Local path (build host)**: `~/Documents/GitHub/unifi-protect`
+- **Build host**: `ntableman@192.168.10.223` (SSH key: `~/.ssh/id_ed25519_particle`)
+- **HA host**: `192.168.70.30:8123` (Docker container, not directly SSH-able)
+- **HA config volume**: `/Volumes/home-BowmanMtn/docker/ha/config` (SMB mount — **read-only from Mac**, ENOLCK on writes — use HACS to deploy, never cp)
 
-## Repository And Host Rules
+## Auth
 
-- **Local path (mounted volume):** `/Volumes/ntableman/Documents/GitHub/unifi-protect`
-- **Remote path on SSH host:** `~/Documents/GitHub/unifi-protect` (no `/Volumes/ntableman` prefix)
-- **Primary remote:** `git@github.com:disruptivepatternmaterial/unifi-protect-sensors.git`
-- **SSH host:** `192.168.10.223` — use `id_ed25519_particle` key, `gh` is at `/opt/homebrew/bin/gh`
+### Git / SSH
+`git push` works via SSH key already configured on the build host. No action needed.
 
-**Push strategy:** The local sandbox cannot push to GitHub (keychain blocked). Always use SSH for `git push`, tag push, and `gh release create`:
-
-```bash
-ssh -i ~/.ssh/id_ed25519_particle -o IdentitiesOnly=yes ntableman@192.168.10.223 \
-  "cd ~/Documents/GitHub/unifi-protect && <commands>"
-```
-
-Do not bounce tasks back to the user unless a step requires interactive human auth (e.g. browser device-code flow).
-
-## Required For Every Release
-
-Before tagging, update all relevant files:
-
-1. `custom_components/unifi_protect_sensors/manifest.json` — bump `version`
-2. `docs/CHANGELOG.md` — add release section with date
-3. `README.md` — update if behavior, setup, or device support changed
-4. `docs/ENTITIES.md` — update if entities or API fields changed
-
-Never ship a release without completing these.
-
-## Release Checklist
-
-```text
-Release Progress:
-- [ ] Confirm working tree clean and on main
-- [ ] Run tests — all must pass
-- [ ] Update manifest.json version
-- [ ] Update docs (CHANGELOG, README, ENTITIES as needed)
-- [ ] Commit: "chore: bump version to X.Y.Z"
-- [ ] Push main via SSH host
-- [ ] Create and push annotated tag via SSH host (after main push)
-- [ ] Publish GitHub release with notes via SSH host
-- [ ] Verify release URL responds 200
-```
-
-## Standard Commands
-
-Check status locally:
+### GitHub API (gh CLI + releases)
+`GITHUB_TOKEN` is set permanently in `~/.zprofile` on the build host. `gh` is at `/opt/homebrew/bin/gh`. In new shells it is auto-available. To use from this agent via SSH:
 
 ```bash
-cd /Volumes/ntableman/Documents/GitHub/unifi-protect
-git status
-git log --oneline -5
+ssh -i ~/.ssh/id_ed25519_particle -o IdentitiesOnly=yes -o StrictHostKeyChecking=no ntableman@192.168.10.223 "
+  export PATH=/opt/homebrew/bin:\$PATH
+  export GITHUB_TOKEN=\$(grep GITHUB_TOKEN ~/.zprofile | cut -d= -f2 | tr -d \"'\")
+  gh release create vX.Y.Z --title '...' --notes '...'
+"
 ```
 
-Run tests (bootstrap `.venv_test` first if it doesn't exist):
+Or use the GitHub REST API directly with curl (no path issues):
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://api.github.com/repos/disruptivepatternmaterial/unifi-protect-sensors/releases" \
+  -d '{"tag_name":"vX.Y.Z","name":"vX.Y.Z — title","body":"notes","draft":false,"prerelease":false}'
+```
+
+The token is stored in `~/.zprofile`. To retrieve it for API calls from this agent:
+```bash
+ssh ntableman@192.168.10.223 "grep GITHUB_TOKEN ~/.zprofile | cut -d= -f2 | tr -d \"'\""
+```
+
+### HA API
+Token (long-lived): `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyMzMyZGY5Y2MzODA0YjJkYjk2Zjc2ZDJlZmNjMjgyNiIsImlhdCI6MTc3ODk0Mzk2NSwiZXhwIjoyMDk0MzAzOTY1fQ.HEPqycmEKmZOCLIwc9Da33ml06I2wp6PmyWgltDE6h0`
+Base URL: `http://192.168.70.30:8123`
+
+## Release Checklist (run in order, all via SSH or curl)
+
+```
+1. Edit code, run tests: .venv_test/bin/pytest tests/ -q --no-header
+2. Bump version in manifest.json
+3. Update docs/CHANGELOG.md
+4. git add -A && git commit -m "..." && git tag vX.Y.Z
+5. git push origin main && git push origin vX.Y.Z
+6. Create GitHub release (curl to API — see above)
+7. Wait ~2 min for HACS to see it, then install + restart HA
+```
+
+## Deploying to HA via HACS
+
+HACS tracks **GitHub releases** (not tags). After publishing a release:
 
 ```bash
-# Create if missing
-[ ! -f .venv_test/bin/pytest ] && python/bin/python3.11 -m venv .venv_test && .venv_test/bin/pip install -q pytest pytest-asyncio
+HA_TOKEN="<token>"
+HA="http://192.168.70.30:8123"
 
+# Check what HACS sees
+curl -s -H "Authorization: Bearer $HA_TOKEN" \
+  "$HA/api/states/update.unifi_protect_sensors_update" | \
+  python3 -c "import json,sys; d=json.load(sys.stdin); a=d['attributes']; print('installed:',a.get('installed_version'),'latest:',a.get('latest_version'))"
+
+# Install the update (once HACS shows the new version as latest)
+curl -s -X POST -H "Authorization: Bearer $HA_TOKEN" -H "Content-Type: application/json" \
+  "$HA/api/services/update/install" \
+  -d '{"entity_id":"update.unifi_protect_sensors_update","version":"X.Y.Z"}'
+
+# Wait 30s for HACS to write files, then restart HA
+sleep 30
+curl -s -X POST -H "Authorization: Bearer $HA_TOKEN" -H "Content-Type: application/json" \
+  "$HA/api/services/homeassistant/restart" -d '{}'
+```
+
+HACS usually picks up new releases within 2-10 minutes. If it hasn't after 10 min, the user can force it in HACS UI: **⋮ → Redownload → type version**.
+
+## Auto-watcher Pattern (run on build host, survives SSH exit)
+
+```bash
+ssh ntableman@192.168.10.223 "
+nohup bash -c '
+  for i in \$(seq 1 60); do
+    sleep 120
+    LATEST=\$(curl -s -H \"Authorization: Bearer \$HA_TOKEN\" \
+      \"http://192.168.70.30:8123/api/states/update.unifi_protect_sensors_update\" | \
+      python3 -c \"import json,sys; print(json.load(sys.stdin)[\\\"attributes\\\"].get(\\\"latest_version\\\"))\")
+    [ \"\$LATEST\" = \"vX.Y.Z\" ] && curl -s -X POST ... install && sleep 30 && curl -s -X POST ... restart && exit 0
+  done
+' > /tmp/hacs_watch.log 2>&1 &
+echo PID \$!
+"
+```
+
+## HA WebSocket API (for entity operations)
+
+Direct entity registry manipulation requires WebSocket (not REST). Use Python from this agent's sandbox or via SSH:
+
+```python
+import asyncio, json
+import websockets  # pip3 install websockets
+
+TOKEN = "<ha_token>"
+
+async def ws_call(payload):
+    async with websockets.connect("ws://192.168.70.30:8123/api/websocket", max_size=10*1024*1024) as ws:
+        await ws.recv()
+        await ws.send(json.dumps({"type": "auth", "access_token": TOKEN}))
+        await ws.recv()
+        await ws.send(json.dumps(payload))
+        return json.loads(await ws.recv())
+
+# Delete stale entity
+asyncio.run(ws_call({"id": 1, "type": "config/entity_registry/remove", "entity_id": "sensor.foo"}))
+
+# List entities for a platform
+result = asyncio.run(ws_call({"id": 1, "type": "config/entity_registry/list"}))
+protect = [e for e in result["result"] if e.get("platform") == "unifi_protect_sensors"]
+```
+
+## Key Lessons Learned
+
+### HA Coordinator / WebSocket
+- **Never use `async_set_updated_data` for WebSocket updates** — it resets the coordinator's scheduled refresh timer. Use `deep_merge(self.data[device_id], delta)` + `self.async_update_listeners()` instead.
+- **Bootstrap interval should be 30s** even with WebSocket — this guarantees `last_updated` stays fresh in HA for stable-room sensors that produce no WS deltas.
+- Protect's `/integration/v1/sensors` endpoint has **no `type` field and no `airQuality` data**. Always use `/proxy/protect/api/bootstrap` for the full payload.
+- Protect WebSocket URL: `wss://{host}/proxy/protect/ws/updates?lastUpdateId={id}` — requires `TOKEN` cookie auth.
+
+### HACS / GitHub
+- HACS tracks **releases**, not tags. A `git tag` alone is not enough.
+- `gh auth login --with-token` requires `read:org` scope. Use `GITHUB_TOKEN` env var instead — `gh` picks it up automatically.
+- The HA config SMB share is **read-only from the Mac** (ENOLCK). Never attempt `cp` or file writes to `/Volumes/home-BowmanMtn/`. HACS writes files from the HA container side.
+
+### Testing
+```bash
+cd ~/Documents/GitHub/unifi-protect
 .venv_test/bin/pytest tests/ -q --no-header
 ```
-
-Commit locally:
-
-```bash
-git add -A
-git commit -m "chore: bump version to X.Y.Z"
-```
-
-## Pushing, Tagging, and Releasing via SSH
-
-Run all of these over SSH. The tag must be created **after** main is pushed so it points at the correct commit.
-
-```bash
-ssh -i ~/.ssh/id_ed25519_particle -o IdentitiesOnly=yes ntableman@192.168.10.223 "
-  cd ~/Documents/GitHub/unifi-protect &&
-  git pull origin main --rebase &&
-  git push origin main &&
-  git tag -d vX.Y.Z 2>/dev/null || true &&
-  git tag -a vX.Y.Z -m 'vX.Y.Z — <release title>' &&
-  git push origin vX.Y.Z
-"
-```
-
-Create the GitHub release using the CHANGELOG as the release notes source. Extract the relevant section first:
-
-```bash
-# Extract notes for this version from CHANGELOG (adjust sed pattern to match version)
-NOTES=$(sed -n '/^## \[X.Y.Z\]/,/^## \[/{ /^## \[X.Y.Z\]/d; /^## \[/d; p }' docs/CHANGELOG.md)
-
-ssh -i ~/.ssh/id_ed25519_particle -o IdentitiesOnly=yes ntableman@192.168.10.223 "
-  export PATH='/opt/homebrew/bin:$PATH'
-  gh release create vX.Y.Z \
-    --repo disruptivepatternmaterial/unifi-protect-sensors \
-    --title 'vX.Y.Z — <release title>' \
-    --notes '$NOTES'
-"
-```
-
-Verify release is live:
-
-```bash
-curl -I -s "https://github.com/disruptivepatternmaterial/unifi-protect-sensors/releases/tag/vX.Y.Z" | grep -i "^HTTP"
-```
-
-## Reporting Back
-
-When done, report:
-
-- Commit SHA pushed to `main`
-- Tag pushed (e.g. `v0.2.0`)
-- Release URL
-- Test result summary (N passed)
-- Which docs were updated
+Tests use HA stubs (no live HA needed). Always run before committing.

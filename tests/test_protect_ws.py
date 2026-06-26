@@ -104,6 +104,44 @@ class TestDecodeWSMessage:
         with pytest.raises(ValueError):
             decode(bad)
 
+    def test_wrong_action_frame_type_raises(self):
+        """Frame 1 with packet_type=2 (data) should be rejected."""
+        decode = self._import()
+        action = {"action": "update", "modelKey": "sensor", "id": "abc"}
+        data = {"stats": {"temperature": {"value": 22.5}}}
+        # Build message with packet_type=2 for the first frame (wrong)
+        bad_action = _build_frame(action, packet_type=2)
+        good_data = _build_frame(data, packet_type=2)
+        with pytest.raises(ValueError, match="action frame"):
+            decode(bad_action + good_data)
+
+    def test_wrong_data_frame_type_raises(self):
+        """Frame 2 with packet_type=1 (action) should be rejected."""
+        decode = self._import()
+        action = {"action": "update", "modelKey": "sensor", "id": "abc"}
+        data = {"stats": {"temperature": {"value": 22.5}}}
+        good_action = _build_frame(action, packet_type=1)
+        bad_data = _build_frame(data, packet_type=1)  # wrong — should be 2
+        with pytest.raises(ValueError, match="data frame"):
+            decode(good_action + bad_data)
+
+    def test_zlib_size_cap_raises(self):
+        """A payload that decompresses beyond the limit should raise ValueError."""
+        from custom_components.unifi_protect_sensors.protect_ws import _MAX_DECOMPRESSED_BYTES
+        # Build a compressible payload just over the limit
+        big = b"A" * (_MAX_DECOMPRESSED_BYTES + 1)
+        compressed = zlib.compress(big)
+        # Manually build a deflated frame
+        header = struct.pack(">BBBBI", 1, 1, 1, 0, len(compressed))
+        frame1 = header + compressed
+        # Build a minimal valid second frame so decode_ws_message can parse it
+        dummy_data = json.dumps({}).encode()
+        header2 = struct.pack(">BBBBI", 2, 1, 0, 0, len(dummy_data))
+        frame2 = header2 + dummy_data
+        from custom_components.unifi_protect_sensors.protect_ws import decode_ws_message
+        with pytest.raises(ValueError, match="exceeds"):
+            decode_ws_message(frame1 + frame2)
+
 
 class TestDeepMerge:
     def _import(self):
