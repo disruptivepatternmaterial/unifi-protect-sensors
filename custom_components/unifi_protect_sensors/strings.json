@@ -47,20 +47,20 @@
       "humidity": { "name": "Humidity" },
       "illuminance": { "name": "Light Level" },
       "battery": { "name": "Battery" },
-      "co2": { "name": "CO\u2082" },
+      "aq_temperature": { "name": "Temperature" },
+      "aq_humidity": { "name": "Humidity" },
+      "co2": { "name": "CO₂" },
       "pm1": { "name": "PM1" },
       "pm25": { "name": "PM2.5" },
       "pm4": { "name": "PM4" },
       "pm10": { "name": "PM10" },
       "voc_index": { "name": "VOC Index" },
-      "nox_index": { "name": "NOx Index" },
       "aqi": { "name": "Air Quality Index" },
       "vape_index": { "name": "Vape Index" }
     },
     "binary_sensor": {
       "leak": { "name": "Water Leak" },
       "battery_low": { "name": "Battery Low" },
-      "connectivity": { "name": "Connected" },
       "tamper": { "name": "Tamper" },
       "vape_detected": { "name": "Vape Detected" }
     }

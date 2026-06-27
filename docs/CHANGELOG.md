@@ -4,6 +4,26 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.5.4] — 2026-06-26
+
+### Fixed
+- **`aq_temperature` and `aq_humidity` showed raw key names in HA UI** — translation
+  strings were missing for the two sensors added in v0.5.3. Both now display as
+  "Temperature" and "Humidity" respectively.
+- **Dead translation strings removed** — `nox_index` and `connectivity` entries were
+  still present in `strings.json` and `translations/en.json` despite those entities
+  being removed in v0.4.0.
+
+### Changed
+- `iot_class` corrected from `local_polling` to `local_push` in `manifest.json` — the
+  integration uses a WebSocket push stream as its primary data path.
+- README updated: added "Why this integration?" section explaining the relationship to
+  the official UniFi Protect integration; added venv setup instructions for development.
+- CHANGELOG v0.5.0 entry clarified to note that the 5-minute bootstrap interval was
+  revised to 30 seconds in v0.5.1.
+
+---
+
 ## [0.5.3] — 2026-06-26
 
 ### Fixed
@@ -72,10 +92,10 @@ All notable changes to this project will be documented here.
 - `deep_merge()` helper for applying partial WebSocket deltas onto the snapshot.
 
 ### Changed
-- Bootstrap polling is now a slow self-healing resync (every 5 minutes) rather than
-  the primary data path; the WebSocket carries live data between resyncs.
+- Bootstrap polling initially set to 5 minutes as the self-healing resync interval
+  (revised to 30 seconds in v0.5.1 — see below).
 - Coordinator gracefully reconnects the WebSocket with exponential backoff and
-  re-authenticates on session expiry. The listener is cleanly cancelled on unload.
+  re-authenticates on session expiry. The listener is cancelled cleanly on unload.
 
 ### Notes
 - No new Python dependencies — the WebSocket client uses Home Assistant's bundled
@@ -162,8 +182,6 @@ All notable changes to this project will be documented here.
 - `coordinator.py` — replaced per-request `aiohttp.ClientSession` creation with
   `async_get_clientsession(hass)` to use the HA-managed shared session with correct lifecycle.
 - `pyproject.toml` — added `requires-python = ">=3.11"` to match `target-version = "py311"`.
-
----
 
 ---
 
