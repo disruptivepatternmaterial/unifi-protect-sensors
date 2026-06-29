@@ -185,35 +185,41 @@ async def async_setup_entry(
 
     @callback
     def _discover_entities() -> None:
-        new_entities: list[UniFiProtectMetricSensor] = []
-        for device_id, device in list(coordinator.data.items()):
-            device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
-            if device_id not in known_devices:
-                dev_reg.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    identifiers={(DOMAIN, device_id)},
-                    name=device.get("name", device_id),
-                    model=device.get("type") or device.get("modelKey"),
-                    manufacturer="Ubiquiti",
-                )
-                known_devices.add(device_id)
-            for description in SENSOR_DESCRIPTIONS:
-                if not device_type_matches(device_type, description.expected_source):
-                    continue
-                # Create the entity only when the field key exists in the payload.
-                # We use key-existence (not value truthiness) so entities survive
-                # temporarily-null readings (e.g. a sensor that is rebooting).
-                if not field_exists(device, description.payload_field):
-                    continue
-                unique_id = f"{device_id}_{description.key}"
-                if unique_id in known_entities:
-                    continue
-                known_entities.add(unique_id)
-                new_entities.append(
-                    UniFiProtectMetricSensor(coordinator, device_id, description)
-                )
-        if new_entities:
-            async_add_entities(new_entities)
+        # This runs inside the coordinator's listener loop on every update, so a
+        # failure here must never propagate (it would drop the WebSocket / skip
+        # sibling entity updates). Swallow and retry on the next update.
+        try:
+            new_entities: list[UniFiProtectMetricSensor] = []
+            for device_id, device in list(coordinator.data.items()):
+                device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
+                if device_id not in known_devices:
+                    dev_reg.async_get_or_create(
+                        config_entry_id=entry.entry_id,
+                        identifiers={(DOMAIN, device_id)},
+                        name=device.get("name", device_id),
+                        model=device.get("type") or device.get("modelKey"),
+                        manufacturer="Ubiquiti",
+                    )
+                    known_devices.add(device_id)
+                for description in SENSOR_DESCRIPTIONS:
+                    if not device_type_matches(device_type, description.expected_source):
+                        continue
+                    # Create the entity only when the field key exists in the payload.
+                    # We use key-existence (not value truthiness) so entities survive
+                    # temporarily-null readings (e.g. a sensor that is rebooting).
+                    if not field_exists(device, description.payload_field):
+                        continue
+                    unique_id = f"{device_id}_{description.key}"
+                    if unique_id in known_entities:
+                        continue
+                    known_entities.add(unique_id)
+                    new_entities.append(
+                        UniFiProtectMetricSensor(coordinator, device_id, description)
+                    )
+            if new_entities:
+                async_add_entities(new_entities)
+        except Exception:  # noqa: BLE001 - discovery must not break the coordinator loop
+            _LOGGER.exception("Sensor entity discovery failed; will retry on next update")
 
     _discover_entities()
     # Re-run discovery on every coordinator update so newly adopted devices (or

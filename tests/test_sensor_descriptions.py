@@ -81,6 +81,11 @@ class TestDeviceTypeMatches:
         fn = self._import()
         assert fn("sensor", "UP-AirQuality") is False
 
+    def test_usl_entry_matches_battery_sources(self):
+        """USL-Entry-US is the battery/battery_low source and must still match."""
+        fn = self._import()
+        assert fn("USL-Entry-US", "UFP-SENSE, USL-Environmental-US, USL-Entry-US") is True
+
     def test_no_reverse_substring_false_positive(self):
         """A short type must not match a longer source (the old bidirectional bug)."""
         fn = self._import()

@@ -25,10 +25,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except Exception:
+    except BaseException:
         # The first refresh already started the background WebSocket task; if
-        # platform setup fails HA will not call async_unload_entry, so tear the
-        # coordinator (and its WS task) down here to avoid leaking it.
+        # platform setup fails (or is cancelled) HA will not call
+        # async_unload_entry, so tear the coordinator (and its WS task) down
+        # here to avoid leaking it. BaseException also covers CancelledError.
         hass.data[DOMAIN].pop(entry.entry_id, None)
         await coordinator.async_shutdown()
         raise

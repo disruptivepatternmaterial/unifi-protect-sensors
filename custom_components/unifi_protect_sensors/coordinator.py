@@ -117,10 +117,13 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                 ssl=self._ssl,
             ) as resp:
                 if resp.status in (401, 403):
-                    # Session expired or token rejected; clear it so the next poll
-                    # re-authenticates. Some consoles return 403 (not 401) for a
-                    # stale cookie, so both must invalidate the session.
+                    # Token rejected. For cookie auth, clear it so the next poll
+                    # re-authenticates (some consoles return 403, not 401, for a
+                    # stale cookie). For a static API key there is nothing to
+                    # refresh, so report it as a credential problem.
                     self._session_cookie = None
+                    if self._api_key:
+                        raise UpdateFailed(f"API key rejected (HTTP {resp.status})")
                     raise UpdateFailed("Session expired; will re-authenticate on next update")
                 if resp.status != 200:
                     raise UpdateFailed(f"Bootstrap endpoint returned HTTP {resp.status}")
