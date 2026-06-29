@@ -45,6 +45,11 @@ _UPDATE_INTERVAL = timedelta(seconds=30)
 _WS_BACKOFF_MIN = 2
 _WS_BACKOFF_MAX = 60
 
+# Timeout (seconds) for blocking REST calls and the WebSocket handshake. The HA
+# shared session otherwise defaults to ~5 minutes, which lets a half-open
+# connection stall the update loop.
+_HTTP_TIMEOUT = 10
+
 
 class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Poll UniFi Protect sensor payloads and stream live updates."""
@@ -73,12 +78,15 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         self._ssl: bool | None = None if self._verify_ssl else False
         self._last_update_id: str | None = None
         self._ws_task: asyncio.Task | None = None
+        # Monotonic time the current WS connection was established, used to reset
+        # reconnect backoff once a connection has proven stable.
+        self._ws_connected_at: float | None = None
 
     async def _async_login(self) -> str:
         """Authenticate and return the TOKEN cookie value."""
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
         try:
-            async with session.post(
+            async with asyncio.timeout(_HTTP_TIMEOUT), session.post(
                 f"{self._base_url}{LOGIN_PATH}",
                 json={"username": self._username, "password": self._password},
                 ssl=self._ssl,
@@ -111,7 +119,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
 
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
         try:
-            async with session.get(
+            async with asyncio.timeout(_HTTP_TIMEOUT), session.get(
                 f"{self._base_url}{BOOTSTRAP_PATH}",
                 headers=headers,
                 ssl=self._ssl,
@@ -172,10 +180,20 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         while True:
             try:
                 await self._ws_connect_and_listen()
-                backoff = _WS_BACKOFF_MIN
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001 - keep the listener alive
+                # _ws_connect_and_listen always raises (even on a clean close), so
+                # reset backoff here when the connection had been stable for a
+                # while — otherwise a few early blips would ratchet the delay to
+                # the max permanently. A connection that survived >= the max
+                # backoff is treated as healthy.
+                if (
+                    self._ws_connected_at is not None
+                    and (self.hass.loop.time() - self._ws_connected_at) >= _WS_BACKOFF_MAX
+                ):
+                    backoff = _WS_BACKOFF_MIN
+                self._ws_connected_at = None
                 _LOGGER.debug("Protect WebSocket dropped (%s); reconnecting in %ds", err, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, _WS_BACKOFF_MAX)
@@ -195,22 +213,13 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         if self._last_update_id:
             url = f"{url}?lastUpdateId={self._last_update_id}"
 
+        # Bound the handshake itself; `heartbeat` only guards an established
+        # connection, not a console that accepts the socket then never upgrades.
         try:
-            async with session.ws_connect(url, headers=headers, ssl=self._ssl, heartbeat=30) as ws:
-                _LOGGER.debug("Protect WebSocket connected")
-                async for msg in ws:
-                    if msg.type in (
-                        aiohttp.WSMsgType.CLOSE,
-                        aiohttp.WSMsgType.CLOSING,
-                        aiohttp.WSMsgType.CLOSED,
-                        aiohttp.WSMsgType.ERROR,
-                    ):
-                        raise ConnectionError(f"WebSocket closed by server: {msg.data}")
-                    if msg.type != aiohttp.WSMsgType.BINARY:
-                        continue
-                    self._handle_ws_message(msg.data)
-                # Loop ended without a close frame — treat as server-initiated close.
-                raise ConnectionError("WebSocket connection ended unexpectedly")
+            async with asyncio.timeout(_HTTP_TIMEOUT):
+                ws = await session.ws_connect(
+                    url, headers=headers, ssl=self._ssl, heartbeat=30
+                )
         except aiohttp.WSServerHandshakeError as err:
             # Auth failure during WS upgrade — invalidate cookie so the next attempt
             # triggers a fresh login instead of retrying a dead token.
@@ -218,6 +227,25 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                 _LOGGER.debug("Protect WebSocket auth failed (%d); clearing session cookie", err.status)
                 self._session_cookie = None
             raise
+
+        self._ws_connected_at = self.hass.loop.time()
+        try:
+            _LOGGER.debug("Protect WebSocket connected")
+            async for msg in ws:
+                if msg.type in (
+                    aiohttp.WSMsgType.CLOSE,
+                    aiohttp.WSMsgType.CLOSING,
+                    aiohttp.WSMsgType.CLOSED,
+                    aiohttp.WSMsgType.ERROR,
+                ):
+                    raise ConnectionError(f"WebSocket closed by server: {msg.data}")
+                if msg.type != aiohttp.WSMsgType.BINARY:
+                    continue
+                self._handle_ws_message(msg.data)
+            # Loop ended without a close frame — treat as server-initiated close.
+            raise ConnectionError("WebSocket connection ended unexpectedly")
+        finally:
+            await ws.close()
 
     def _handle_ws_message(self, raw: bytes) -> None:
         """Decode one WS message and merge it into the current snapshot."""
