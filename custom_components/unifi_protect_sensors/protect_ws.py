@@ -75,11 +75,18 @@ def _decode_frame(buffer: bytes, offset: int) -> tuple[ProtectFrame, int]:
     payload = buffer[start:end]
     if deflated:
         dec = zlib.decompressobj()
-        payload = dec.decompress(payload, _MAX_DECOMPRESSED_BYTES)
+        try:
+            payload = dec.decompress(payload, _MAX_DECOMPRESSED_BYTES)
+        except zlib.error as err:
+            raise ValueError(f"Malformed deflate payload: {err}") from err
         if dec.unconsumed_tail:
             raise ValueError(
                 f"Decompressed frame exceeds {_MAX_DECOMPRESSED_BYTES // (1024 * 1024)} MB limit"
             )
+        if not dec.eof:
+            # Stream ended before the deflate end-of-stream marker — a truncated
+            # or malformed compressed payload.
+            raise ValueError("Incomplete deflate stream in frame payload")
 
     return ProtectFrame(packet_type, payload_format, deflated, payload), end
 
