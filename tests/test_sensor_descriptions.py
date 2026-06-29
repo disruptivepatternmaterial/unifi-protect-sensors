@@ -6,7 +6,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +202,7 @@ class TestSensorDescriptions:
             )
 
     def test_usl_fields_match_fixture(self, usl_device):
-        from custom_components.unifi_protect_sensors.helpers import get_nested, field_exists
+        from custom_components.unifi_protect_sensors.helpers import field_exists, get_nested
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS
 
         usl_descs = [d for d in SENSOR_DESCRIPTIONS if "USL-Environmental-US" in d.expected_source]
@@ -220,7 +219,7 @@ class TestSensorDescriptions:
                 )
 
     def test_aq_fields_match_fixture(self, aq_device):
-        from custom_components.unifi_protect_sensors.helpers import get_nested, field_exists
+        from custom_components.unifi_protect_sensors.helpers import field_exists, get_nested
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS
 
         aq_descs = [d for d in SENSOR_DESCRIPTIONS if "UP-AirQuality" in d.expected_source]
@@ -293,8 +292,8 @@ class TestBinarySensorDescriptions:
         )
 
     def test_usl_fields_present_in_fixture(self, usl_device):
-        from custom_components.unifi_protect_sensors.helpers import field_exists
         from custom_components.unifi_protect_sensors.binary_sensor import BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.helpers import field_exists
 
         usl_descs = [d for d in BINARY_SENSOR_DESCRIPTIONS if "USL-Environmental-US" in d.expected_source]
         assert usl_descs, "No binary sensor descriptions matched USL-Environmental-US"
@@ -304,8 +303,8 @@ class TestBinarySensorDescriptions:
             )
 
     def test_vape_field_present_in_aq_fixture(self, aq_device):
-        from custom_components.unifi_protect_sensors.helpers import field_exists
         from custom_components.unifi_protect_sensors.binary_sensor import BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.helpers import field_exists
 
         vape = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "vape_detected")
         assert field_exists(aq_device, vape.payload_field), (
@@ -362,8 +361,9 @@ class TestEntityProperties:
         return coord
 
     def test_sensor_native_value_reads_nested_field(self, usl_device):
-        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
         from unittest.mock import patch
+
+        from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({"abc123": usl_device})
@@ -377,7 +377,7 @@ class TestEntityProperties:
         assert entity.native_value == 22.5
 
     def test_sensor_native_value_none_when_device_missing(self, usl_device):
-        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({})
@@ -390,7 +390,7 @@ class TestEntityProperties:
         assert entity.native_value is None
 
     def test_aq_sensor_co2_reads_airquality_path(self, aq_device):
-        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "co2")
         coord = self._make_mock_coordinator({"def456": aq_device})
@@ -403,8 +403,9 @@ class TestEntityProperties:
         assert entity.native_value == 694
 
     def test_sensor_available_false_when_coordinator_failed(self, usl_device):
-        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
         from unittest.mock import PropertyMock, patch
+
+        from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({"abc123": usl_device}, last_update_success=False)
@@ -422,7 +423,7 @@ class TestEntityProperties:
             assert entity.available is False
 
     def test_sensor_unavailable_when_device_disconnected(self, usl_device):
-        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         device = {**usl_device, "state": "DISCONNECTED"}
@@ -436,7 +437,7 @@ class TestEntityProperties:
         assert entity.available is False
 
     def test_sensor_available_when_connected_or_state_missing(self, usl_device):
-        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         # usl_device has state CONNECTED; also test a device with no state key.
@@ -449,7 +450,10 @@ class TestEntityProperties:
             assert entity.available is True
 
     def test_binary_sensor_leak_null_means_off(self, usl_device):
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.binary_sensor import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            UniFiProtectBinarySensor,
+        )
 
         assert usl_device["leakDetectedAt"] is None
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "leak")
@@ -465,7 +469,10 @@ class TestEntityProperties:
         assert entity.is_on is False
 
     def test_binary_sensor_tamper_null_means_off(self, usl_device):
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.binary_sensor import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            UniFiProtectBinarySensor,
+        )
 
         assert usl_device["tamperingDetectedAt"] is None
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "tamper")
@@ -481,7 +488,10 @@ class TestEntityProperties:
 
     def test_binary_sensor_battery_low_null_is_unknown(self):
         """battery_low stays tri-state: a null isLow reads as unknown, not off."""
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.binary_sensor import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            UniFiProtectBinarySensor,
+        )
 
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "battery_low")
         assert desc.null_means_off is False
@@ -495,7 +505,10 @@ class TestEntityProperties:
         assert entity.is_on is None
 
     def test_binary_sensor_tamper_timestamp_means_on(self, usl_device):
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.binary_sensor import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            UniFiProtectBinarySensor,
+        )
 
         device = {**usl_device, "tamperingDetectedAt": "2026-06-25T10:00:00Z"}
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "tamper")
@@ -509,7 +522,10 @@ class TestEntityProperties:
         assert entity.is_on is True
 
     def test_binary_sensor_battery_low_false(self, usl_device):
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.binary_sensor import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            UniFiProtectBinarySensor,
+        )
 
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "battery_low")
         coord = self._make_mock_coordinator({"abc123": usl_device})
@@ -522,7 +538,10 @@ class TestEntityProperties:
         assert entity.is_on is False
 
     def test_binary_sensor_vape_detected_zero_means_off(self, aq_device):
-        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+        from custom_components.unifi_protect_sensors.binary_sensor import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            UniFiProtectBinarySensor,
+        )
 
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "vape_detected")
         coord = self._make_mock_coordinator({"def456": aq_device})
