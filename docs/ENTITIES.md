@@ -46,14 +46,18 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 ## Notes
 
 - **Authentication**: Both API key (Bearer token) and username/password (cookie-based) are
-  supported. API key is preferred. Cookies are refreshed automatically on 401 responses and
-  on WebSocket handshake auth failures (401/403).
+  supported. API key is preferred. Cookies are refreshed automatically on REST 401/403
+  responses and on WebSocket handshake auth failures (401/403).
 - **Update mechanism**: WebSocket push for instant updates; 30-second bootstrap resync as
-  freshness floor for stable-room sensors.
+  freshness floor for stable-room sensors. Entity discovery re-runs on every update, so a
+  newly adopted sensor appears automatically without reloading the integration.
 - **Bootstrap endpoint**: `/proxy/protect/api/bootstrap` — the only endpoint that returns
   the device `type` field and full `airQuality` data. The integration endpoint
-  `/proxy/protect/integration/v1/sensors` is **not used** (it lacks both).
+  `/proxy/protect/integration/v1/sensors` is **not used** (it lacks both); the config flow
+  also validates against the bootstrap endpoint so setup mirrors runtime.
 - **SSL**: Verification is disabled by default because UniFi devices ship with self-signed
-  certificates. Enable via the options flow if your console has a valid certificate.
-- **Device model matching**: Uses the `type` field from bootstrap (e.g. `UFP-SENSE`,
-  `USL-Environmental-US`, `UP-AirQuality`). Falls back to `modelKey` if `type` is absent.
+  certificates. Enable via the options flow if your console has a valid certificate — the
+  change is applied immediately (the entry reloads on save).
+- **Device model matching**: Exact, case-insensitive match against the `type` field from
+  bootstrap (e.g. `UFP-SENSE`, `USL-Environmental-US`, `UP-AirQuality`), falling back to
+  `modelKey` if `type` is absent.
