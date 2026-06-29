@@ -125,6 +125,18 @@ class TestDecodeWSMessage:
         with pytest.raises(ValueError, match="data frame"):
             decode(good_action + bad_data)
 
+    def test_incomplete_deflate_stream_raises(self):
+        """A truncated compressed payload (missing end-of-stream) must raise."""
+        decode = self._import()
+        good_action = _build_frame(
+            {"action": "update", "modelKey": "sensor", "id": "abc"}, packet_type=1
+        )
+        full = zlib.compress(json.dumps({"stats": {"temperature": {"value": 1}}}).encode())
+        truncated = full[:-2]  # drop trailing checksum so the stream is incomplete
+        header = struct.pack(">BBBBI", 2, 1, 1, 0, len(truncated))
+        with pytest.raises(ValueError):
+            decode(good_action + header + truncated)
+
     def test_zlib_size_cap_raises(self):
         """A payload that decompresses beyond the limit should raise ValueError."""
         from custom_components.unifi_protect_sensors.protect_ws import _MAX_DECOMPRESSED_BYTES
