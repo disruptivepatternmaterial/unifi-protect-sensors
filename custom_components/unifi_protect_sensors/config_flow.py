@@ -59,7 +59,9 @@ async def _async_validate_credentials(hass, host: str, port: int, username: str,
                     return "invalid_auth"
                 if resp.status not in (200, 201):
                     return "cannot_connect"
-    except Exception:
+    except (aiohttp.ClientError, TimeoutError, OSError):
+        # Network/TLS failures map to cannot_connect; programming errors are
+        # allowed to surface instead of being masked.
         return "cannot_connect"
     return None
 
