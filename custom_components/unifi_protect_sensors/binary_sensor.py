@@ -30,6 +30,9 @@ class ProtectBinarySensorEntityDescription(BinarySensorEntityDescription):
 
     payload_field: str
     expected_source: str = ""
+    # For timestamp-style fields (e.g. leakDetectedAt) a null value is a
+    # definitive "clear" reading, not "unknown", so map None -> off.
+    null_means_off: bool = False
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[ProtectBinarySensorEntityDescription, ...] = (
@@ -40,6 +43,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ProtectBinarySensorEntityDescription, ...] = (
         payload_field="leakDetectedAt",
         expected_source="UFP-SENSE, USL-Environmental-US",
         device_class=BinarySensorDeviceClass.MOISTURE,
+        null_means_off=True,
     ),
     ProtectBinarySensorEntityDescription(
         key="battery_low",
@@ -56,6 +60,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ProtectBinarySensorEntityDescription, ...] = (
         payload_field="tamperingDetectedAt",
         expected_source="UFP-SENSE, USL-Environmental-US",
         device_class=BinarySensorDeviceClass.TAMPER,
+        null_means_off=True,
     ),
     ProtectBinarySensorEntityDescription(
         key="vape_detected",
@@ -143,11 +148,14 @@ class UniFiProtectBinarySensor(CoordinatorEntity[ProtectSensorsCoordinator], Bin
             return None
         value = get_nested(device, self.entity_description.payload_field)
         if value is None:
-            return None
+            # Timestamp fields report null when the event is clear; treat that as
+            # off. Genuinely tri-state fields (e.g. batteryStatus.isLow) leave the
+            # flag unset and stay unknown when null.
+            return False if self.entity_description.null_means_off else None
         if isinstance(value, bool):
             return value
         # Timestamp fields (leakDetectedAt, tamperingDetectedAt) are truthy when
-        # an event is active, null/None when clear.
+        # an event is active.
         return bool(value)
 
     @property
