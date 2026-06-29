@@ -55,7 +55,7 @@ async def _async_validate_credentials(hass, host: str, port: int, username: str,
                 ssl=ssl,
                 timeout=timeout,
             ) as resp:
-                if resp.status == 401:
+                if resp.status in (401, 403):
                     return "invalid_auth"
                 if resp.status not in (200, 201):
                     return "cannot_connect"

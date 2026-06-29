@@ -82,33 +82,38 @@ async def async_setup_entry(
 
     @callback
     def _discover_entities() -> None:
-        new_entities: list[UniFiProtectBinarySensor] = []
-        for device_id, device in list(coordinator.data.items()):
-            device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
-            if device_id not in known_devices:
-                dev_reg.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    identifiers={(DOMAIN, device_id)},
-                    name=device.get("name", device_id),
-                    model=device.get("type") or device.get("modelKey"),
-                    manufacturer="Ubiquiti",
-                )
-                known_devices.add(device_id)
-            for description in BINARY_SENSOR_DESCRIPTIONS:
-                if not device_type_matches(device_type, description.expected_source):
-                    continue
-                # Check key existence (not value), so entities survive null readings.
-                if not field_exists(device, description.payload_field):
-                    continue
-                unique_id = f"{device_id}_{description.key}"
-                if unique_id in known_entities:
-                    continue
-                known_entities.add(unique_id)
-                new_entities.append(
-                    UniFiProtectBinarySensor(coordinator, device_id, description)
-                )
-        if new_entities:
-            async_add_entities(new_entities)
+        # Runs in the coordinator listener loop on every update; never let a
+        # failure propagate and disrupt the WebSocket / other listeners.
+        try:
+            new_entities: list[UniFiProtectBinarySensor] = []
+            for device_id, device in list(coordinator.data.items()):
+                device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
+                if device_id not in known_devices:
+                    dev_reg.async_get_or_create(
+                        config_entry_id=entry.entry_id,
+                        identifiers={(DOMAIN, device_id)},
+                        name=device.get("name", device_id),
+                        model=device.get("type") or device.get("modelKey"),
+                        manufacturer="Ubiquiti",
+                    )
+                    known_devices.add(device_id)
+                for description in BINARY_SENSOR_DESCRIPTIONS:
+                    if not device_type_matches(device_type, description.expected_source):
+                        continue
+                    # Check key existence (not value), so entities survive null readings.
+                    if not field_exists(device, description.payload_field):
+                        continue
+                    unique_id = f"{device_id}_{description.key}"
+                    if unique_id in known_entities:
+                        continue
+                    known_entities.add(unique_id)
+                    new_entities.append(
+                        UniFiProtectBinarySensor(coordinator, device_id, description)
+                    )
+            if new_entities:
+                async_add_entities(new_entities)
+        except Exception:  # noqa: BLE001 - discovery must not break the coordinator loop
+            _LOGGER.exception("Binary sensor entity discovery failed; will retry on next update")
 
     _discover_entities()
     entry.async_on_unload(coordinator.async_add_listener(_discover_entities))
