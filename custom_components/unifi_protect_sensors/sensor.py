@@ -21,6 +21,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -244,7 +245,7 @@ class UniFiProtectMetricSensor(CoordinatorEntity[ProtectSensorsCoordinator], Sen
         self.entity_description = description
         self._device_id = device_id
         self._attr_unique_id = f"{device_id}_{description.key}"
-        self._attr_device_info = {"identifiers": {(DOMAIN, device_id)}}
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     @property
     def native_value(self) -> Any | None:
