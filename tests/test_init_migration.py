@@ -42,6 +42,19 @@ class TestAsyncMigrateEntry:
         _, kwargs = hass.config_entries.async_update_entry.call_args
         assert kwargs["unique_id"] == "console.local:443"
 
+    async def test_v1_missing_host_keeps_existing_unique_id(self):
+        from custom_components.unifi_protect_sensors import async_migrate_entry
+
+        entry = _make_entry(1, {"port": 443}, "legacy-id")
+        hass = MagicMock()
+
+        result = await async_migrate_entry(hass, entry)
+
+        assert result is True
+        _, kwargs = hass.config_entries.async_update_entry.call_args
+        assert kwargs["unique_id"] == "legacy-id"
+        assert kwargs["version"] == 2
+
     async def test_v2_is_noop(self):
         from custom_components.unifi_protect_sensors import async_migrate_entry
 
