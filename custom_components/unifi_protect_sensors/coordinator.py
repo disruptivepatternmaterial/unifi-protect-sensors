@@ -81,6 +81,9 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         # Monotonic time the current WS connection was established, used to reset
         # reconnect backoff once a connection has proven stable.
         self._ws_connected_at: float | None = None
+        # Serialises login so the bootstrap poll and WS reconnect can't both
+        # spend a server session by logging in at the same time.
+        self._login_lock = asyncio.Lock()
 
     async def _async_login(self) -> str:
         """Authenticate and return the TOKEN cookie value."""
@@ -108,8 +111,11 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         else:
-            if self._session_cookie is None:
-                self._session_cookie = await self._async_login()
+            async with self._login_lock:
+                # Re-check inside the lock: a concurrent caller may have logged
+                # in while we were waiting.
+                if self._session_cookie is None:
+                    self._session_cookie = await self._async_login()
             headers["Cookie"] = f"TOKEN={self._session_cookie}"
         return headers
 
@@ -273,7 +279,9 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
 
         verb = action.get("action")
 
-        data = self.data or {}
+        # Use the live dict even when empty ({} is falsy, so `or {}` would make a
+        # throwaway copy and silently drop a remove/merge).
+        data = self.data if self.data is not None else {}
 
         if verb == "remove":
             if device_id in data:
