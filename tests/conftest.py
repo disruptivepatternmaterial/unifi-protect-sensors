@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Minimal Home Assistant stubs (used when homeassistant is not installed)
 # ---------------------------------------------------------------------------
