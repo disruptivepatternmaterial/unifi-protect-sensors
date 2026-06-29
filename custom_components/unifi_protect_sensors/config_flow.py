@@ -14,17 +14,16 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
+    BOOTSTRAP_PATH,
     CONF_API_KEY,
     CONF_VERIFY_SSL,
     DEFAULT_PORT,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
+    LOGIN_PATH,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-_LOGIN_PATH = "/api/auth/login"
-_SENSORS_PATH = "/proxy/protect/integration/v1/sensors"
 
 
 async def _async_validate_credentials(hass, host: str, port: int, username: str, password: str, api_key: str, verify_ssl: bool) -> str | None:
@@ -36,19 +35,22 @@ async def _async_validate_credentials(hass, host: str, port: int, username: str,
     timeout = aiohttp.ClientTimeout(total=10)
     try:
         if api_key:
+            # Validate against the same bootstrap endpoint the coordinator polls,
+            # so a key that authenticates but lacks bootstrap access is rejected
+            # here instead of failing silently after setup.
             async with session.get(
-                f"{base_url}{_SENSORS_PATH}",
+                f"{base_url}{BOOTSTRAP_PATH}",
                 headers={"Authorization": f"Bearer {api_key}"},
                 ssl=ssl,
                 timeout=timeout,
             ) as resp:
-                if resp.status == 401:
+                if resp.status in (401, 403):
                     return "invalid_api_key"
                 if resp.status != 200:
                     return "cannot_connect"
         else:
             async with session.post(
-                f"{base_url}{_LOGIN_PATH}",
+                f"{base_url}{LOGIN_PATH}",
                 json={"username": username, "password": password},
                 ssl=ssl,
                 timeout=timeout,
