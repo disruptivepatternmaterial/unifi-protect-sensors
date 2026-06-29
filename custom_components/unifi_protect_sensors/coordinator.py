@@ -215,21 +215,15 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
 
         # Bound the handshake itself; `heartbeat` only guards an established
         # connection, not a console that accepts the socket then never upgrades.
+        # `ws` is initialised to None and closed in a single finally so a socket
+        # that gets established right as the timeout fires can't leak.
+        ws = None
         try:
             async with asyncio.timeout(_HTTP_TIMEOUT):
                 ws = await session.ws_connect(
                     url, headers=headers, ssl=self._ssl, heartbeat=30
                 )
-        except aiohttp.WSServerHandshakeError as err:
-            # Auth failure during WS upgrade — invalidate cookie so the next attempt
-            # triggers a fresh login instead of retrying a dead token.
-            if err.status in (401, 403):
-                _LOGGER.debug("Protect WebSocket auth failed (%d); clearing session cookie", err.status)
-                self._session_cookie = None
-            raise
-
-        self._ws_connected_at = self.hass.loop.time()
-        try:
+            self._ws_connected_at = self.hass.loop.time()
             _LOGGER.debug("Protect WebSocket connected")
             async for msg in ws:
                 if msg.type in (
@@ -244,8 +238,16 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                 self._handle_ws_message(msg.data)
             # Loop ended without a close frame — treat as server-initiated close.
             raise ConnectionError("WebSocket connection ended unexpectedly")
+        except aiohttp.WSServerHandshakeError as err:
+            # Auth failure during WS upgrade — invalidate cookie so the next attempt
+            # triggers a fresh login instead of retrying a dead token.
+            if err.status in (401, 403):
+                _LOGGER.debug("Protect WebSocket auth failed (%d); clearing session cookie", err.status)
+                self._session_cookie = None
+            raise
         finally:
-            await ws.close()
+            if ws is not None:
+                await ws.close()
 
     def _handle_ws_message(self, raw: bytes) -> None:
         """Decode one WS message and merge it into the current snapshot."""
