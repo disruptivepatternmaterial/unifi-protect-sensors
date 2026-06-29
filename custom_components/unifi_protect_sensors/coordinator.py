@@ -113,10 +113,11 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         else:
             async with self._login_lock:
                 # Re-check inside the lock: a concurrent caller may have logged
-                # in while we were waiting.
+                # in while we were waiting. Read the cookie under the lock too so
+                # a concurrent 401 handler can't null it before we use it.
                 if self._session_cookie is None:
                     self._session_cookie = await self._async_login()
-            headers["Cookie"] = f"TOKEN={self._session_cookie}"
+                headers["Cookie"] = f"TOKEN={self._session_cookie}"
         return headers
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
@@ -279,8 +280,9 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
 
         verb = action.get("action")
 
-        # Use the live dict even when empty ({} is falsy, so `or {}` would make a
-        # throwaway copy and silently drop a remove/merge).
+        # Defensive: alias the live snapshot dict. An empty {} is falsy, so the
+        # old `or {}` produced a throwaway; aliasing keeps any future in-place
+        # write landing on self.data.
         data = self.data if self.data is not None else {}
 
         if verb == "remove":
