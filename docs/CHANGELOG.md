@@ -23,6 +23,20 @@ All notable changes to this project will be documented here.
 - **Device-type matching false positives** — the bidirectional substring filter
   could match a short type against a longer model name (and a blank type against
   everything). Replaced with an exact, case-insensitive match.
+- **Leak/tamper showed "unknown" while clear** — `leakDetectedAt` /
+  `tamperingDetectedAt` are null when no event is active (a definitive clear
+  state), so those binary sensors now report off instead of unknown, fixing
+  `to: 'off'` automations and history.
+- **Requests could stall for minutes** — login, bootstrap, and the WebSocket
+  handshake are now bounded by a 10-second timeout instead of relying on the
+  shared session's ~5-minute default.
+- **WebSocket reconnect backoff never recovered** — backoff now resets after a
+  connection has been stable, so a few early blips no longer pin reconnects at
+  the 60-second maximum.
+- **`pm1` and `pm4` had no device class** — both now use the proper
+  `SensorDeviceClass.PM1` / `PM4`, matching `pm25` / `pm10`.
+- **Two consoles on one host could not both be added** — the config-entry unique
+  id now includes the port (`host:port`).
 
 ### Added
 - **Newly adopted sensors appear automatically** — entity discovery now re-runs
