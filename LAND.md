@@ -37,7 +37,7 @@ All six landed across commits `58dc9f3`, `4e36d09`, `2c598ce`.
 - [ ] **#7 Host-only unique_id** — 3/6. `async_set_unique_id(host)` (`config_flow.py:89`) blocks two consoles on same host, breaks on IP change. Fix: use `host:port`, or MAC from bootstrap.
 - [x] **#11 No timeouts on runtime HTTP/WS** — 2/6 — `6fc2180`. Login, bootstrap, and the WS handshake wrapped in `asyncio.timeout(10)`.
 - [x] **PM1/PM4 missing `device_class`** — lone (GPT-5.5) — `7bbc1dc`. Verified `SensorDeviceClass.PM1`/`PM4` exist in HA ([sensor entity docs](https://developers.home-assistant.io/docs/core/entity/sensor/)); assigned + stub + test updated.
-- [ ] **Availability semantics** — lone, STILL OPEN (needs a design decision). Opus: REST hiccup masks healthy WS data (sensors go unavailable >=30s). Gemini: device `state: DISCONNECTED` not reflected (stale-but-available). These two pull in opposite directions; deferred pending intended behavior.
+- [x] **Availability semantics** — lone — done (device-state option). Entities now go unavailable on explicit `state == "DISCONNECTED"` (Gemini's stale-offline concern), treating unknown/transient states as available. The REST-vs-WS decoupling half (Opus) was intentionally NOT changed: WS resyncs every 30s and decoupling risks masking real outages. Tests added.
 
 ### Consider — also done
 

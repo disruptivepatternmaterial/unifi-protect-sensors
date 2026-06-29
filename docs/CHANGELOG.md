@@ -43,6 +43,9 @@ All notable changes to this project will be documented here.
   only swallows network errors; a narrow WebSocket connection leak on handshake
   timeout was closed.
 
+- **Offline devices now show unavailable** — entities go unavailable when their
+  device reports `state: DISCONNECTED` instead of showing stale values.
+
 ### Added
 - **Newly adopted sensors appear automatically** — entity discovery now re-runs
   on every coordinator update, so devices/fields that show up after startup get
