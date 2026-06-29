@@ -26,6 +26,23 @@ def field_exists(data: dict, path: str) -> bool:
     return isinstance(cur, dict) and keys[-1] in cur
 
 
+def device_type_matches(device_type: str, expected_source: str) -> bool:
+    """Return True if ``device_type`` is one of the comma-separated expected sources.
+
+    An empty ``expected_source`` matches every device (used for metrics that exist
+    on all device types). Matching is case-insensitive and exact against Protect's
+    model identifier (the device ``type`` field, e.g. ``"USL-Environmental-US"``).
+
+    Exact matching is deliberate: a blank or unknown ``device_type`` matches nothing
+    (so unrecognised devices get no entities rather than all of them), and partial
+    overlaps between model names cannot cross-match.
+    """
+    sources = [s.strip().lower() for s in expected_source.split(",") if s.strip()]
+    if not sources:
+        return True
+    return device_type.strip().lower() in sources
+
+
 def deep_merge(base: dict, delta: dict) -> dict:
     """Recursively merge ``delta`` into ``base`` in place and return ``base``.
 

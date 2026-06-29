@@ -19,7 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ProtectSensorsCoordinator
-from .helpers import field_exists, get_nested
+from .helpers import device_type_matches, field_exists, get_nested
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,34 +73,45 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up binary sensor entities from coordinator data."""
+    """Set up binary sensor entities from coordinator data, including devices
+    that appear after startup (e.g. a newly adopted sensor)."""
     coordinator: ProtectSensorsCoordinator = hass.data[DOMAIN][entry.entry_id]
     dev_reg = dr.async_get(hass)
-    entities: list[UniFiProtectBinarySensor] = []
+    known_devices: set[str] = set()
+    known_entities: set[str] = set()
 
-    for device_id, device in coordinator.data.items():
-        dev_reg.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, device_id)},
-            name=device.get("name", device_id),
-            model=device.get("type") or device.get("modelKey"),
-            manufacturer="Ubiquiti",
-        )
-        device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
-        for description in BINARY_SENSOR_DESCRIPTIONS:
-            # Filter by device type — empty expected_source means all devices.
-            sources = [s.strip() for s in description.expected_source.split(",") if s.strip()]
-            if sources and not any(
-                s.lower() in device_type.lower() or device_type.lower() in s.lower()
-                for s in sources
-            ):
-                continue
-            # Check key existence (not value), so entities survive null readings.
-            if not field_exists(device, description.payload_field):
-                continue
-            entities.append(UniFiProtectBinarySensor(coordinator, device_id, description))
+    @callback
+    def _discover_entities() -> None:
+        new_entities: list[UniFiProtectBinarySensor] = []
+        for device_id, device in list(coordinator.data.items()):
+            device_type: str = (device.get("type") or device.get("modelKey") or "").strip()
+            if device_id not in known_devices:
+                dev_reg.async_get_or_create(
+                    config_entry_id=entry.entry_id,
+                    identifiers={(DOMAIN, device_id)},
+                    name=device.get("name", device_id),
+                    model=device.get("type") or device.get("modelKey"),
+                    manufacturer="Ubiquiti",
+                )
+                known_devices.add(device_id)
+            for description in BINARY_SENSOR_DESCRIPTIONS:
+                if not device_type_matches(device_type, description.expected_source):
+                    continue
+                # Check key existence (not value), so entities survive null readings.
+                if not field_exists(device, description.payload_field):
+                    continue
+                unique_id = f"{device_id}_{description.key}"
+                if unique_id in known_entities:
+                    continue
+                known_entities.add(unique_id)
+                new_entities.append(
+                    UniFiProtectBinarySensor(coordinator, device_id, description)
+                )
+        if new_entities:
+            async_add_entities(new_entities)
 
-    async_add_entities(entities)
+    _discover_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_discover_entities))
 
 
 class UniFiProtectBinarySensor(CoordinatorEntity[ProtectSensorsCoordinator], BinarySensorEntity):

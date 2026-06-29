@@ -51,6 +51,47 @@ class TestGetNested:
         assert fn({"a": 0}, "a") == 0
 
 
+class TestDeviceTypeMatches:
+    def _import(self):
+        from custom_components.unifi_protect_sensors.helpers import device_type_matches
+        return device_type_matches
+
+    def test_exact_match(self):
+        fn = self._import()
+        assert fn("UP-AirQuality", "UP-AirQuality") is True
+
+    def test_case_insensitive(self):
+        fn = self._import()
+        assert fn("up-airquality", "UP-AirQuality") is True
+
+    def test_match_within_comma_list(self):
+        fn = self._import()
+        assert fn("USL-Environmental-US", "UFP-SENSE, USL-Environmental-US") is True
+
+    def test_empty_expected_source_matches_all(self):
+        fn = self._import()
+        assert fn("anything", "") is True
+
+    def test_blank_device_type_matches_nothing_specific(self):
+        fn = self._import()
+        assert fn("", "UP-AirQuality") is False
+
+    def test_generic_modelkey_does_not_match(self):
+        """modelKey fallback ('sensor') must not match a concrete model source."""
+        fn = self._import()
+        assert fn("sensor", "UP-AirQuality") is False
+
+    def test_no_reverse_substring_false_positive(self):
+        """A short type must not match a longer source (the old bidirectional bug)."""
+        fn = self._import()
+        assert fn("UP", "UP-AirQuality") is False
+        assert fn("US", "USL-Environmental-US") is False
+
+    def test_no_forward_substring_false_positive(self):
+        fn = self._import()
+        assert fn("UP-AirQuality-Pro", "UP-AirQuality") is False
+
+
 class TestFieldExists:
     def _import(self):
         from custom_components.unifi_protect_sensors.helpers import field_exists
