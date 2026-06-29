@@ -4,6 +4,33 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Options flow `verify_ssl` had no effect** — the coordinator only read
+  `entry.data`, while the options flow wrote `entry.options`, and no reload
+  listener was registered. Options are now merged over data and the entry is
+  reloaded when options change, so toggling SSL verification actually applies.
+- **Background WebSocket task could leak** — if platform setup failed after the
+  first refresh, the WS task kept running. The coordinator is now linked to the
+  config entry and torn down if setup fails.
+- **Stale session not recovered on HTTP 403** — only 401 cleared the session
+  cookie; consoles that return 403 for a dead token now also trigger re-auth.
+- **API-key validation hit the wrong endpoint** — the config flow validated
+  `/proxy/protect/integration/v1/sensors` but the coordinator polls
+  `/proxy/protect/api/bootstrap`; validation now uses the same bootstrap
+  endpoint so a mis-scoped key is rejected at setup.
+- **Device-type matching false positives** — the bidirectional substring filter
+  could match a short type against a longer model name (and a blank type against
+  everything). Replaced with an exact, case-insensitive match.
+
+### Added
+- **Newly adopted sensors appear automatically** — entity discovery now re-runs
+  on every coordinator update, so devices/fields that show up after startup get
+  entities without reloading the integration.
+
+---
+
 ## [0.5.4] — 2026-06-26
 
 ### Fixed
