@@ -159,16 +159,19 @@ class TestSensorDescriptions:
         keys = {d.key for d in descs}
         required = {"temperature", "humidity", "illuminance", "battery",
                     "aq_temperature", "aq_humidity",
-                    "co2", "pm25", "pm10", "aqi"}
+                    "co2", "pm1", "pm25", "pm4", "pm10", "aqi"}
         missing = required - keys
         assert not missing, f"Missing expected sensor keys: {missing}"
 
-    def test_particulate_sensors_have_device_class(self):
-        """All PM sensors (pm1/pm25/pm4/pm10) must carry a device_class."""
+    def test_particulate_sensors_have_correct_device_class(self):
+        """Each PM sensor must carry its matching device_class (not just any)."""
         descs = self._import()
         by_key = {d.key: d for d in descs}
-        for key in ("pm1", "pm25", "pm4", "pm10"):
-            assert by_key[key].device_class is not None, f"{key} is missing device_class"
+        expected = {"pm1": "pm1", "pm25": "pm25", "pm4": "pm4", "pm10": "pm10"}
+        for key, device_class in expected.items():
+            assert by_key[key].device_class == device_class, (
+                f"{key} should have device_class {device_class}, got {by_key[key].device_class}"
+            )
 
     def test_no_nox_index(self):
         """nox_index is not in the UP-AirQuality API — should not be defined."""
@@ -433,6 +436,36 @@ class TestEntityProperties:
 
         # null leakDetectedAt → no active leak → off (not unknown)
         assert entity.is_on is False
+
+    def test_binary_sensor_tamper_null_means_off(self, usl_device):
+        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+
+        assert usl_device["tamperingDetectedAt"] is None
+        desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "tamper")
+        assert desc.null_means_off is True
+        coord = self._make_mock_coordinator({"abc123": usl_device})
+
+        entity = object.__new__(UniFiProtectBinarySensor)
+        entity.coordinator = coord
+        entity._device_id = "abc123"
+        entity.entity_description = desc
+
+        assert entity.is_on is False
+
+    def test_binary_sensor_battery_low_null_is_unknown(self):
+        """battery_low stays tri-state: a null isLow reads as unknown, not off."""
+        from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
+
+        desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "battery_low")
+        assert desc.null_means_off is False
+        coord = self._make_mock_coordinator({"abc123": {"batteryStatus": {"isLow": None}}})
+
+        entity = object.__new__(UniFiProtectBinarySensor)
+        entity.coordinator = coord
+        entity._device_id = "abc123"
+        entity.entity_description = desc
+
+        assert entity.is_on is None
 
     def test_binary_sensor_tamper_timestamp_means_on(self, usl_device):
         from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
