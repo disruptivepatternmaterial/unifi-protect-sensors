@@ -26,10 +26,12 @@ from typing import Any
 
 import aiohttp
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import BOOTSTRAP_PATH, LOGIN_PATH, WS_PATH
 from .helpers import deep_merge
 from .protect_ws import decode_ws_message
 
@@ -38,9 +40,6 @@ _LOGGER = logging.getLogger(__name__)
 # Bootstrap runs every 30 s so that stable-room sensors stay fresh in HA.
 # WebSocket delivers changes immediately between polls.
 _UPDATE_INTERVAL = timedelta(seconds=30)
-_BOOTSTRAP_PATH = "/proxy/protect/api/bootstrap"
-_LOGIN_PATH = "/api/auth/login"
-_WS_PATH = "/proxy/protect/ws/updates"
 
 # WebSocket reconnect backoff bounds (seconds)
 _WS_BACKOFF_MIN = 2
@@ -50,19 +49,24 @@ _WS_BACKOFF_MAX = 60
 class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Poll UniFi Protect sensor payloads and stream live updates."""
 
-    def __init__(self, hass: HomeAssistant, entry_data: dict[str, Any]) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name="UniFi Protect Sensors",
             update_interval=_UPDATE_INTERVAL,
         )
-        self._host: str = entry_data["host"]
-        self._port: int = int(entry_data.get("port", 443))
-        self._username: str = entry_data.get("username", "")
-        self._password: str = entry_data.get("password", "")
-        self._api_key: str = entry_data.get("api_key", "")
-        self._verify_ssl: bool = bool(entry_data.get("verify_ssl", False))
+        # Options override data so runtime changes (e.g. verify_ssl) take effect
+        # after the entry is reloaded by the options update listener.
+        config: dict[str, Any] = {**entry.data, **entry.options}
+        self._entry_id: str = entry.entry_id
+        self._host: str = config["host"]
+        self._port: int = int(config.get("port", 443))
+        self._username: str = config.get("username", "")
+        self._password: str = config.get("password", "")
+        self._api_key: str = config.get("api_key", "")
+        self._verify_ssl: bool = bool(config.get("verify_ssl", False))
         self._base_url = f"https://{self._host}:{self._port}"
         self._session_cookie: str | None = None
         # ssl=False disables verification; ssl=None uses the default context (verifies)
@@ -75,7 +79,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
         try:
             async with session.post(
-                f"{self._base_url}{_LOGIN_PATH}",
+                f"{self._base_url}{LOGIN_PATH}",
                 json={"username": self._username, "password": self._password},
                 ssl=self._ssl,
             ) as resp:
@@ -108,12 +112,14 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
         try:
             async with session.get(
-                f"{self._base_url}{_BOOTSTRAP_PATH}",
+                f"{self._base_url}{BOOTSTRAP_PATH}",
                 headers=headers,
                 ssl=self._ssl,
             ) as resp:
-                if resp.status == 401:
-                    # Session expired; clear token so next poll re-authenticates
+                if resp.status in (401, 403):
+                    # Session expired or token rejected; clear it so the next poll
+                    # re-authenticates. Some consoles return 403 (not 401) for a
+                    # stale cookie, so both must invalidate the session.
                     self._session_cookie = None
                     raise UpdateFailed("Session expired; will re-authenticate on next update")
                 if resp.status != 200:
@@ -154,7 +160,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         if self._ws_task is not None and not self._ws_task.done():
             return
         self._ws_task = self.hass.async_create_background_task(
-            self._ws_loop(), name="unifi_protect_sensors_ws"
+            self._ws_loop(), name=f"unifi_protect_sensors_ws_{self._entry_id}"
         )
 
     async def _ws_loop(self) -> None:
@@ -182,7 +188,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         headers = await self._async_auth_headers()
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
 
-        url = f"{self._base_url}{_WS_PATH}"
+        url = f"{self._base_url}{WS_PATH}"
         if self._last_update_id:
             url = f"{url}?lastUpdateId={self._last_update_id}"
 

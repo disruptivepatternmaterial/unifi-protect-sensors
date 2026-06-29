@@ -14,3 +14,9 @@ CONF_VERIFY_SSL = "verify_ssl"
 DEFAULT_PORT = 443
 # UniFi devices use self-signed certs; users may enable verification via options flow
 DEFAULT_VERIFY_SSL = False
+
+# Protect console API paths (shared by the coordinator and the config flow so
+# validation hits the same endpoints the integration uses at runtime).
+LOGIN_PATH = "/api/auth/login"
+BOOTSTRAP_PATH = "/proxy/protect/api/bootstrap"
+WS_PATH = "/proxy/protect/ws/updates"

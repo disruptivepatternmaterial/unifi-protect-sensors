@@ -108,11 +108,12 @@ def _install_ha_stubs() -> None:
         def __class_getitem__(cls, item):
             return cls
 
-        def __init__(self, hass, logger, *, name, update_interval):
+        def __init__(self, hass, logger, *, name, update_interval, config_entry=None):
             self.hass = hass
             self._logger = logger
             self.name = name
             self.update_interval = update_interval
+            self.config_entry = config_entry
             self.data: dict = {}
             self.last_update_success: bool = True
 
