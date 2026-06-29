@@ -61,3 +61,6 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 - **Device model matching**: Exact, case-insensitive match against the `type` field from
   bootstrap (e.g. `UFP-SENSE`, `USL-Environmental-US`, `UP-AirQuality`), falling back to
   `modelKey` if `type` is absent.
+- **Availability**: An entity is unavailable when the last poll failed, the device is no
+  longer in the snapshot, or the device reports `state: DISCONNECTED`. Unknown or transient
+  states are treated as available to avoid flapping.
