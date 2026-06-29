@@ -160,7 +160,12 @@ class UniFiProtectBinarySensor(CoordinatorEntity[ProtectSensorsCoordinator], Bin
 
     @property
     def available(self) -> bool:
-        return super().available and self._device_id in self.coordinator.data
+        device = self.coordinator.data.get(self._device_id)
+        if not (super().available and device is not None):
+            return False
+        # Only an explicit DISCONNECTED marks the device unavailable; unknown or
+        # transient states stay available to avoid flapping on stale snapshots.
+        return device.get("state") != "DISCONNECTED"
 
     @callback
     def _handle_coordinator_update(self) -> None:

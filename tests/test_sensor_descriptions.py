@@ -421,6 +421,33 @@ class TestEntityProperties:
         ):
             assert entity.available is False
 
+    def test_sensor_unavailable_when_device_disconnected(self, usl_device):
+        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+
+        desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
+        device = {**usl_device, "state": "DISCONNECTED"}
+        coord = self._make_mock_coordinator({"abc123": device})
+
+        entity = object.__new__(UniFiProtectMetricSensor)
+        entity.coordinator = coord
+        entity._device_id = "abc123"
+        entity.entity_description = desc
+
+        assert entity.available is False
+
+    def test_sensor_available_when_connected_or_state_missing(self, usl_device):
+        from custom_components.unifi_protect_sensors.sensor import UniFiProtectMetricSensor, SENSOR_DESCRIPTIONS
+
+        desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
+        # usl_device has state CONNECTED; also test a device with no state key.
+        for device in ({**usl_device}, {k: v for k, v in usl_device.items() if k != "state"}):
+            coord = self._make_mock_coordinator({"abc123": device})
+            entity = object.__new__(UniFiProtectMetricSensor)
+            entity.coordinator = coord
+            entity._device_id = "abc123"
+            entity.entity_description = desc
+            assert entity.available is True
+
     def test_binary_sensor_leak_null_means_off(self, usl_device):
         from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
 
