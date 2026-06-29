@@ -411,11 +411,12 @@ class TestEntityProperties:
         ):
             assert entity.available is False
 
-    def test_binary_sensor_leak_null_means_unknown(self, usl_device):
+    def test_binary_sensor_leak_null_means_off(self, usl_device):
         from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
 
         assert usl_device["leakDetectedAt"] is None
         desc = next(d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "leak")
+        assert desc.null_means_off is True
         coord = self._make_mock_coordinator({"abc123": usl_device})
 
         entity = object.__new__(UniFiProtectBinarySensor)
@@ -423,7 +424,8 @@ class TestEntityProperties:
         entity._device_id = "abc123"
         entity.entity_description = desc
 
-        assert entity.is_on is None  # null → unknown state
+        # null leakDetectedAt → no active leak → off (not unknown)
+        assert entity.is_on is False
 
     def test_binary_sensor_tamper_timestamp_means_on(self, usl_device):
         from custom_components.unifi_protect_sensors.binary_sensor import UniFiProtectBinarySensor, BINARY_SENSOR_DESCRIPTIONS
