@@ -35,9 +35,15 @@ All six landed across commits `58dc9f3`, `4e36d09`, `2c598ce`.
 - [ ] **#4 WS backoff reset is dead code** — 3/6 (Opus dissents). `_ws_connect_and_listen` always raises, so `backoff = _WS_BACKOFF_MIN` (`coordinator.py:166`) is unreachable; delay ratchets to 60s. Fix: track connection uptime and reset backoff after a connection survives longer than a threshold.
 - [ ] **#5 Leak/tamper `null` -> Unknown not Off** — 4/6 (Sonnet-max dissents). `is_on` returns `None` for null timestamps (`binary_sensor.py:129-130`); breaks `to: 'off'` automations. Fix: per-description `null_means_off` flag, set on leak + tamper; keep tri-state for `batteryStatus.isLow`.
 - [ ] **#7 Host-only unique_id** — 3/6. `async_set_unique_id(host)` (`config_flow.py:89`) blocks two consoles on same host, breaks on IP change. Fix: use `host:port`, or MAC from bootstrap.
-- [ ] **#11 No timeouts on runtime HTTP/WS** — 2/6. Coordinator login/bootstrap/ws_connect have no timeout; can stall for minutes. Fix: wrap in `asyncio.timeout(10)`.
-- [ ] **PM1/PM4 missing `device_class`** — lone (GPT-5.5). `sensor.py:117,133`; `SensorDeviceClass.PM1/PM4` exist (HA 2024.1+). Update `tests/conftest.py` stub if added.
-- [ ] **Availability semantics** — lone. Opus: REST hiccup masks healthy WS data (sensors go unavailable >=30s). Gemini: device `state: DISCONNECTED` not reflected (stale-but-available). Decide intended behavior.
+- [x] **#11 No timeouts on runtime HTTP/WS** — 2/6 — `6fc2180`. Login, bootstrap, and the WS handshake wrapped in `asyncio.timeout(10)`.
+- [x] **PM1/PM4 missing `device_class`** — lone (GPT-5.5) — `7bbc1dc`. Verified `SensorDeviceClass.PM1`/`PM4` exist in HA ([sensor entity docs](https://developers.home-assistant.io/docs/core/entity/sensor/)); assigned + stub + test updated.
+- [ ] **Availability semantics** — lone, STILL OPEN (needs a design decision). Opus: REST hiccup masks healthy WS data (sensors go unavailable >=30s). Gemini: device `state: DISCONNECTED` not reflected (stale-but-available). These two pull in opposite directions; deferred pending intended behavior.
+
+### Consider — also done
+
+- [x] **#4 WS backoff reset dead code** — 3/6 — `6fc2180`. Backoff resets after a connection stays up >= max backoff.
+- [x] **#5 Leak/tamper null -> Unknown** — 4/6 — `5a632d5`. `null_means_off` flag maps null -> off for leak/tamper.
+- [x] **#7 Host-only unique_id** — 3/6 — `d6860f3`. Now `host:port`.
 
 ---
 

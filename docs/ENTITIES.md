@@ -22,9 +22,9 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 | `aq_temperature` | `temperature` | °C | `airQuality.temperature.value` | UP-AirQuality |
 | `aq_humidity` | `humidity` | % | `airQuality.humidity.value` | UP-AirQuality |
 | `co2` | `carbon_dioxide` | ppm | `airQuality.co2.value` | UP-AirQuality |
-| `pm1` | — | µg/m³ | `airQuality.pm1p0.value` | UP-AirQuality |
+| `pm1` | `pm1` | µg/m³ | `airQuality.pm1p0.value` | UP-AirQuality |
 | `pm25` | `pm25` | µg/m³ | `airQuality.pm2p5.value` | UP-AirQuality |
-| `pm4` | — | µg/m³ | `airQuality.pm4p0.value` | UP-AirQuality |
+| `pm4` | `pm4` | µg/m³ | `airQuality.pm4p0.value` | UP-AirQuality |
 | `pm10` | `pm10` | µg/m³ | `airQuality.pm10p0.value` | UP-AirQuality |
 | `voc_index` | — | — | `airQuality.voc.value` | UP-AirQuality |
 | `aqi` | `aqi` | — | `airQuality.aqi.value` | UP-AirQuality |
@@ -36,9 +36,9 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 
 | Entity Key | Device Class | API Field (bootstrap path) | Notes | Supported By |
 |---|---|---|---|---|
-| `leak` | `moisture` | `leakDetectedAt` | `null` = clear, timestamp = active | UFP-SENSE, USL-Environmental-US |
-| `battery_low` | `battery` | `batteryStatus.isLow` | Diagnostic | UFP-SENSE, USL-Environmental-US, USL-Entry-US |
-| `tamper` | `tamper` | `tamperingDetectedAt` | `null` = clear, timestamp = active | UFP-SENSE, USL-Environmental-US |
+| `leak` | `moisture` | `leakDetectedAt` | `null` = off (clear), timestamp = on (active) | UFP-SENSE, USL-Environmental-US |
+| `battery_low` | `battery` | `batteryStatus.isLow` | Diagnostic; `null` = unknown | UFP-SENSE, USL-Environmental-US, USL-Entry-US |
+| `tamper` | `tamper` | `tamperingDetectedAt` | `null` = off (clear), timestamp = on (active) | UFP-SENSE, USL-Environmental-US |
 | `vape_detected` | — | `airQuality.vape.value` | Non-zero value = detected | UP-AirQuality |
 
 ---
