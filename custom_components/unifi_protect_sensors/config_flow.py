@@ -88,7 +88,9 @@ class UniFiProtectSensorsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if error:
                 errors["base"] = error
             else:
-                await self.async_set_unique_id(user_input[CONF_HOST])
+                await self.async_set_unique_id(
+                    f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
+                )
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=f"UniFi Protect Sensors ({user_input[CONF_HOST]})",
