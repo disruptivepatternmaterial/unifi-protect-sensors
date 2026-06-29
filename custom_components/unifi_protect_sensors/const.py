@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from homeassistant.const import Platform
+
 DOMAIN = "unifi_protect_sensors"
 
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 # Config entry keys — not duplicating homeassistant.const; these are our own
 # storage keys so they are explicit here regardless of HA's constant values.
