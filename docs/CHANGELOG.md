@@ -36,7 +36,12 @@ All notable changes to this project will be documented here.
 - **`pm1` and `pm4` had no device class** — both now use the proper
   `SensorDeviceClass.PM1` / `PM4`, matching `pm25` / `pm10`.
 - **Two consoles on one host could not both be added** — the config-entry unique
-  id now includes the port (`host:port`).
+  id now includes the port (`host:port`); existing entries are migrated
+  automatically (config entry v1 -> v2).
+- **Hardening** — login is serialized to avoid duplicate sessions; the WebSocket
+  decoder rejects truncated/malformed compressed frames; config-flow validation
+  only swallows network errors; a narrow WebSocket connection leak on handshake
+  timeout was closed.
 
 ### Added
 - **Newly adopted sensors appear automatically** — entity discovery now re-runs

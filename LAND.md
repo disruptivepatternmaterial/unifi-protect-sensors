@@ -47,21 +47,22 @@ All six landed across commits `58dc9f3`, `4e36d09`, `2c598ce`.
 
 ---
 
-## Noted (nits)
+## Noted (nits) — DONE
 
-- [ ] **#9 Concurrent double-login** — 2/6. Add `asyncio.Lock` around the login block (`coordinator.py:99-100`).
-- [ ] **#12 Broad `except Exception` in flow** — 2/6. Narrow to `(aiohttp.ClientError, OSError, TimeoutError)` (`config_flow.py:60`).
-- [ ] **#13 zlib stream-completeness / trailing bytes** — 2/6. Assert full decode + final offset == `len(buffer)` in decoder.
-- [ ] **`_attr_device_info` plain dict** — lone. Use `DeviceInfo` dataclass.
-- [ ] **`async_get_clientsession(verify_ssl=...)` overridden by per-request `ssl=`** — lone. Misleading; rely on one mechanism.
-- [ ] **`self.data or {}` breaks remove on empty dict** — lone. Use `self.data if self.data is not None else {}`.
-- [ ] Minor: duplicated `_LOGIN_PATH`, redundant `dev_reg` calls in both platforms, per-entry WS task name, `Platform` enum instead of strings, `codeowners: []`.
+- [x] **#9 Concurrent double-login** — 2/6 — `96ff1d1`. `asyncio.Lock` around the login block.
+- [x] **#12 Broad `except Exception` in flow** — 2/6 — `977a3d1`. Narrowed to `(aiohttp.ClientError, TimeoutError, OSError)`.
+- [x] **#13 zlib stream-completeness** — 2/6 — `537f7c4`. Assert `dec.eof`; wrap `zlib.error` as `ValueError`. (Did not add the strict trailing-bytes-after-frames assertion — no evidence Protect emits exactly two frames with no padding, so that would be fragile.)
+- [x] **`_attr_device_info` plain dict** — lone — `0c7a147`. Now `DeviceInfo`.
+- [x] **`self.data or {}` breaks remove on empty dict** — lone — `96ff1d1`.
+- [x] Minor: duplicated `_LOGIN_PATH` (shared const), redundant `dev_reg` calls (guarded by `known_devices`), per-entry WS task name, `Platform` enum (`0c7a147`).
+- [ ] **`codeowners: []`** — left blank (maintainer GH handle not assumed here).
+- [ ] **`async_get_clientsession(verify_ssl=...)` vs per-request `ssl=`** — lone. Left as-is: both point the same way; the per-request `ssl` is belt-and-suspenders and removing the param risks subtle session/cookie-jar selection changes. Revisit only if it causes confusion.
 
 ---
 
 ## Verify before acting
 
-- [ ] **Shared client-session cookie collision (Gemini)** — TOKEN may land in HA's shared cookie jar and clobber across multiple consoles / leak to other integrations. Reproduce with two config entries before deciding whether to switch to `async_create_clientsession`.
+- [ ] **Shared client-session cookie collision (Gemini)** — EVALUATED, deferred. aiohttp's shared cookie jar is keyed per-domain, so cross-console clobber needs the same host; and we already send the TOKEN via an explicit header. Real risk is narrow (leak to another integration talking to the same host). Switching cookie auth to a dedicated `async_create_clientsession` is the proper hardening but is a session-lifecycle change deserving its own focused effort + tests; API-key auth (recommended) is unaffected. Deferred, not blocking.
 
 ---
 
