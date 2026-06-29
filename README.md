@@ -54,8 +54,8 @@ entity, and works standalone without requiring the official integration to be in
 The key is sent as a `Bearer` token on every request.
 
 **Username / Password**: The integration performs a cookie-based login to `/api/auth/login`.
-The session cookie is stored in memory and refreshed automatically on 401 responses and on
-WebSocket auth failures.
+The session cookie is stored in memory and refreshed automatically on 401/403 responses and
+on WebSocket auth failures.
 
 ## How Updates Work
 
@@ -70,6 +70,9 @@ The integration uses two data channels in parallel:
   stays current in HA even when a device is in a stable room and produces no WebSocket
   deltas between polls.
 
+Newly adopted sensors are picked up automatically (no reload needed), and an entity becomes
+unavailable when its device reports `state: DISCONNECTED`.
+
 ## Entity Reference
 
 See [docs/ENTITIES.md](docs/ENTITIES.md) for the full entity list with API field paths and
@@ -81,7 +84,7 @@ See [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ## Requirements
 
-- Home Assistant 2024.1 or later
+- Home Assistant 2025.1 or later
 - Python 3.11+
 - No additional Python dependencies — the WebSocket client uses HA's bundled `aiohttp`
 
@@ -94,8 +97,12 @@ python3.11 -m venv .venv_test
 
 # Run tests (no HA install required — stubs are injected automatically)
 .venv_test/bin/pytest tests/ -q
+
+# Lint (ruff config in pyproject.toml)
+ruff check custom_components/ tests/
 ```
 
-Tests cover: helper functions, WebSocket frame decoding, deep-merge, sensor/binary-sensor
-descriptions, coordinator payload parsing, and entity property logic. 61 tests, no live
-HA instance needed.
+Tests cover: helper functions, WebSocket frame decoding (incl. truncated/oversized frames),
+deep-merge, sensor/binary-sensor descriptions, device-type matching, dynamic entity
+discovery, coordinator auth/login-lock, config-entry migration, and entity property logic
+(including availability). 87 tests, no live HA instance needed.
