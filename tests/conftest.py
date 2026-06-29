@@ -52,7 +52,9 @@ def _install_ha_stubs() -> None:
         ILLUMINANCE = "illuminance"
         BATTERY = "battery"
         CO2 = "carbon_dioxide"
+        PM1 = "pm1"
         PM25 = "pm25"
+        PM4 = "pm4"
         PM10 = "pm10"
         AQI = "aqi"
 

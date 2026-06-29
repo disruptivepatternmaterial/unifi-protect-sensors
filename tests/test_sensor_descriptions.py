@@ -163,6 +163,13 @@ class TestSensorDescriptions:
         missing = required - keys
         assert not missing, f"Missing expected sensor keys: {missing}"
 
+    def test_particulate_sensors_have_device_class(self):
+        """All PM sensors (pm1/pm25/pm4/pm10) must carry a device_class."""
+        descs = self._import()
+        by_key = {d.key: d for d in descs}
+        for key in ("pm1", "pm25", "pm4", "pm10"):
+            assert by_key[key].device_class is not None, f"{key} is missing device_class"
+
     def test_no_nox_index(self):
         """nox_index is not in the UP-AirQuality API — should not be defined."""
         descs = self._import()

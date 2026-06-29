@@ -118,6 +118,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         payload_field="airQuality.pm1p0.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        device_class=SensorDeviceClass.PM1,
         state_class=SensorStateClass.MEASUREMENT,
     ),
     ProtectSensorEntityDescription(
@@ -135,6 +136,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtectSensorEntityDescription, ...] = (
         payload_field="airQuality.pm4p0.value",
         expected_source="UP-AirQuality",
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        device_class=SensorDeviceClass.PM4,
         state_class=SensorStateClass.MEASUREMENT,
     ),
     ProtectSensorEntityDescription(
