@@ -7,10 +7,28 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PLATFORMS
+from .const import DEFAULT_PORT, DOMAIN, PLATFORMS
 from .coordinator import ProtectSensorsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config entries to the current version.
+
+    v1 -> v2: the unique id changed from ``host`` to ``host:port`` so that two
+    consoles on the same host can coexist. Rewrite existing unique ids so the
+    duplicate-prevention check keeps matching after an upgrade.
+    """
+    if entry.version == 1:
+        host = entry.data.get("host")
+        port = entry.data.get("port", DEFAULT_PORT)
+        new_unique_id = f"{host}:{port}" if host else entry.unique_id
+        hass.config_entries.async_update_entry(
+            entry, unique_id=new_unique_id, version=2
+        )
+        _LOGGER.debug("Migrated config entry to v2 (unique_id=%s)", new_unique_id)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

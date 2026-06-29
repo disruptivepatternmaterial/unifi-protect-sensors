@@ -67,7 +67,8 @@ async def _async_validate_credentials(hass, host: str, port: int, username: str,
 class UniFiProtectSensorsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for UniFi Protect Sensors."""
 
-    VERSION = 1
+    # v2: unique_id changed from host to host:port (see async_migrate_entry).
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
