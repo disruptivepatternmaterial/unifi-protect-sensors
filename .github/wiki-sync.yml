@@ -1,0 +1,5 @@
+# Install at unifi-protect-sensors/.github/wiki-sync.yml
+# Default branch: main. PUBLIC repo, so its wiki is public and the workflow
+# runs the network-identifier scan against everything published here.
+auto:
+  - glob: 'docs/*.md'
