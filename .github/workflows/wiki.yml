@@ -30,4 +30,4 @@ jobs:
           # --check reads `git log` per source file, so it needs real history.
           fetch-depth: 0
 
-      - uses: disruptivepatternmaterial/wiki-sync@main
+      - uses: disruptivepatternmaterial/wiki-sync-action@main
