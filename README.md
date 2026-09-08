@@ -86,6 +86,10 @@ supported device models.
 
 See [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## License
+
+[MIT](LICENSE).
+
 ## Requirements
 
 - Home Assistant 2025.1 or later

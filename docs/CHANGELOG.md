@@ -25,6 +25,8 @@ All notable changes to this project will be documented here.
 - **Continuous integration** — every push and pull request now runs ruff,
   the test suite, Home Assistant `hassfest`, and HACS validation. None of these
   ran automatically before, so a broken commit could be tagged and released.
+- **MIT license** — the repository had none, which fails HACS validation and
+  left users with no terms for the code they were installing.
 
 ### Fixed
 
