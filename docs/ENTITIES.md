@@ -2,7 +2,7 @@
 
 This integration exposes the following entities for each discovered UniFi Protect sensor device.
 
-Entities are created only for sensor/binary-sensor descriptions whose `expected_source` matches
+Entities are created only for sensor/binary-sensor descriptions whose `device_types` include
 the device's `type` field (from bootstrap) **and** whose payload path exists in the device data.
 This prevents ghost entities on device types that don't support a given reading.
 
@@ -47,7 +47,13 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 
 - **Authentication**: Both API key (Bearer token) and username/password (cookie-based) are
   supported. API key is preferred. Cookies are refreshed automatically on REST 401/403
-  responses and on WebSocket handshake auth failures (401/403).
+  responses and on WebSocket handshake auth failures (401/403). When the console rejects the
+  credentials themselves (a bad password or a revoked API key), the coordinator raises
+  `ConfigEntryAuthFailed` and Home Assistant prompts for new ones via the reauth flow rather
+  than retrying a credential the console has already refused.
+- **Device naming**: The device registry entry is created from each entity's `DeviceInfo`,
+  using the device's `name` from bootstrap; a device Protect reports with `name: null` falls
+  back to its device id.
 - **Update mechanism**: WebSocket push for instant updates; 30-second bootstrap resync as
   freshness floor for stable-room sensors. Entity discovery re-runs on every update, so a
   newly adopted sensor appears automatically without reloading the integration.
@@ -58,9 +64,9 @@ live-patched by `/proxy/protect/ws/updates` (WebSocket push, instant on change).
 - **SSL**: Verification is disabled by default because UniFi devices ship with self-signed
   certificates. Enable via the options flow if your console has a valid certificate — the
   change is applied immediately (the entry reloads on save).
-- **Device model matching**: Exact, case-insensitive match against the `type` field from
-  bootstrap (e.g. `UFP-SENSE`, `USL-Environmental-US`, `UP-AirQuality`), falling back to
-  `modelKey` if `type` is absent.
+- **Device model matching**: Exact, case-insensitive match of the bootstrap `type` field
+  against each description's `device_types` tuple (e.g. `UFP-SENSE`, `USL-Environmental-US`,
+  `UP-AirQuality`), falling back to `modelKey` if `type` is absent.
 - **Availability**: An entity is unavailable when the last poll failed, the device is no
   longer in the snapshot, or the device reports `state: DISCONNECTED`. Unknown or transient
   states are treated as available to avoid flapping.

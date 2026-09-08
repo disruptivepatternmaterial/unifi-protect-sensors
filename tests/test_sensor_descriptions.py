@@ -50,50 +50,50 @@ class TestGetNested:
         assert fn({"a": 0}, "a") == 0
 
 
-class TestDeviceTypeMatches:
-    def _import(self):
-        from custom_components.unifi_protect_sensors.helpers import device_type_matches
-        return device_type_matches
+class TestDescriptionSupports:
+    """ProtectDescriptionMixin.supports decides which models get which entities."""
+
+    def _make(self, *device_types):
+        from custom_components.unifi_protect_sensors.entity import ProtectDescriptionMixin
+
+        return ProtectDescriptionMixin(payload_field="x", device_types=device_types)
 
     def test_exact_match(self):
-        fn = self._import()
-        assert fn("UP-AirQuality", "UP-AirQuality") is True
+        assert self._make("UP-AirQuality").supports("UP-AirQuality") is True
 
     def test_case_insensitive(self):
-        fn = self._import()
-        assert fn("up-airquality", "UP-AirQuality") is True
+        assert self._make("UP-AirQuality").supports("up-airquality") is True
 
-    def test_match_within_comma_list(self):
-        fn = self._import()
-        assert fn("USL-Environmental-US", "UFP-SENSE, USL-Environmental-US") is True
+    def test_match_within_multiple_types(self):
+        desc = self._make("UFP-SENSE", "USL-Environmental-US")
+        assert desc.supports("USL-Environmental-US") is True
 
-    def test_empty_expected_source_matches_all(self):
-        fn = self._import()
-        assert fn("anything", "") is True
+    def test_empty_device_types_matches_all(self):
+        assert self._make().supports("anything") is True
 
     def test_blank_device_type_matches_nothing_specific(self):
-        fn = self._import()
-        assert fn("", "UP-AirQuality") is False
+        assert self._make("UP-AirQuality").supports("") is False
 
     def test_generic_modelkey_does_not_match(self):
-        """modelKey fallback ('sensor') must not match a concrete model source."""
-        fn = self._import()
-        assert fn("sensor", "UP-AirQuality") is False
+        """modelKey fallback ('sensor') must not match a concrete model."""
+        assert self._make("UP-AirQuality").supports("sensor") is False
 
-    def test_usl_entry_matches_battery_sources(self):
-        """USL-Entry-US is the battery/battery_low source and must still match."""
-        fn = self._import()
-        assert fn("USL-Entry-US", "UFP-SENSE, USL-Environmental-US, USL-Entry-US") is True
+    def test_usl_entry_matches_battery_models(self):
+        """USL-Entry-US is a battery/battery_low source and must still match."""
+        from custom_components.unifi_protect_sensors.const import BATTERY_MODELS
+
+        assert self._make(*BATTERY_MODELS).supports("USL-Entry-US") is True
 
     def test_no_reverse_substring_false_positive(self):
-        """A short type must not match a longer source (the old bidirectional bug)."""
-        fn = self._import()
-        assert fn("UP", "UP-AirQuality") is False
-        assert fn("US", "USL-Environmental-US") is False
+        """A short type must not match a longer model (the old bidirectional bug)."""
+        assert self._make("UP-AirQuality").supports("UP") is False
+        assert self._make("USL-Environmental-US").supports("US") is False
 
     def test_no_forward_substring_false_positive(self):
-        fn = self._import()
-        assert fn("UP-AirQuality-Pro", "UP-AirQuality") is False
+        assert self._make("UP-AirQuality").supports("UP-AirQuality-Pro") is False
+
+    def test_surrounding_whitespace_is_tolerated(self):
+        assert self._make("UP-AirQuality").supports("  UP-AirQuality ") is True
 
 
 class TestFieldExists:
@@ -181,7 +181,7 @@ class TestSensorDescriptions:
     def test_aq_fields_use_airquality_path(self):
         """All UP-AirQuality sensor descriptions must use airQuality.* paths."""
         descs = self._import()
-        aq_descs = [d for d in descs if "UP-AirQuality" in d.expected_source]
+        aq_descs = [d for d in descs if d.supports("UP-AirQuality")]
         for desc in aq_descs:
             assert desc.payload_field.startswith("airQuality."), (
                 f"AQ sensor '{desc.key}' uses wrong path '{desc.payload_field}' "
@@ -193,7 +193,7 @@ class TestSensorDescriptions:
         descs = self._import()
         usl_descs = [
             d for d in descs
-            if "USL-Environmental-US" in d.expected_source and d.key in ("temperature", "humidity", "illuminance")
+            if d.supports("USL-Environmental-US") and d.key in ("temperature", "humidity", "illuminance")
         ]
         assert usl_descs, "No USL temp/humidity/illuminance descriptions found"
         for desc in usl_descs:
@@ -205,7 +205,7 @@ class TestSensorDescriptions:
         from custom_components.unifi_protect_sensors.helpers import field_exists, get_nested
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS
 
-        usl_descs = [d for d in SENSOR_DESCRIPTIONS if "USL-Environmental-US" in d.expected_source]
+        usl_descs = [d for d in SENSOR_DESCRIPTIONS if d.supports("USL-Environmental-US")]
         assert usl_descs, "No descriptions matched USL-Environmental-US"
         for desc in usl_descs:
             assert field_exists(usl_device, desc.payload_field), (
@@ -222,7 +222,7 @@ class TestSensorDescriptions:
         from custom_components.unifi_protect_sensors.helpers import field_exists, get_nested
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS
 
-        aq_descs = [d for d in SENSOR_DESCRIPTIONS if "UP-AirQuality" in d.expected_source]
+        aq_descs = [d for d in SENSOR_DESCRIPTIONS if d.supports("UP-AirQuality")]
         assert aq_descs, "No descriptions matched UP-AirQuality"
         for desc in aq_descs:
             assert field_exists(aq_device, desc.payload_field), (
@@ -295,7 +295,7 @@ class TestBinarySensorDescriptions:
         from custom_components.unifi_protect_sensors.binary_sensor import BINARY_SENSOR_DESCRIPTIONS
         from custom_components.unifi_protect_sensors.helpers import field_exists
 
-        usl_descs = [d for d in BINARY_SENSOR_DESCRIPTIONS if "USL-Environmental-US" in d.expected_source]
+        usl_descs = [d for d in BINARY_SENSOR_DESCRIPTIONS if d.supports("USL-Environmental-US")]
         assert usl_descs, "No binary sensor descriptions matched USL-Environmental-US"
         for desc in usl_descs:
             assert field_exists(usl_device, desc.payload_field), (
@@ -361,18 +361,15 @@ class TestEntityProperties:
         return coord
 
     def test_sensor_native_value_reads_nested_field(self, usl_device):
-        from unittest.mock import patch
-
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
         coord = self._make_mock_coordinator({"abc123": usl_device})
 
-        with patch("custom_components.unifi_protect_sensors.sensor.CoordinatorEntity.__init__", lambda s, c: None):
-            entity = object.__new__(UniFiProtectMetricSensor)
-            entity.coordinator = coord
-            entity._device_id = "abc123"
-            entity.entity_description = desc
+        entity = object.__new__(UniFiProtectMetricSensor)
+        entity.coordinator = coord
+        entity._device_id = "abc123"
+        entity.entity_description = desc
 
         assert entity.native_value == 22.5
 
@@ -403,8 +400,6 @@ class TestEntityProperties:
         assert entity.native_value == 694
 
     def test_sensor_available_false_when_coordinator_failed(self, usl_device):
-        from unittest.mock import PropertyMock, patch
-
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor
 
         desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "temperature")
@@ -415,12 +410,7 @@ class TestEntityProperties:
         entity._device_id = "abc123"
         entity.entity_description = desc
 
-        with patch(
-            "custom_components.unifi_protect_sensors.sensor.CoordinatorEntity.available",
-            new_callable=PropertyMock,
-            return_value=False,
-        ):
-            assert entity.available is False
+        assert entity.available is False
 
     def test_sensor_unavailable_when_device_disconnected(self, usl_device):
         from custom_components.unifi_protect_sensors.sensor import SENSOR_DESCRIPTIONS, UniFiProtectMetricSensor

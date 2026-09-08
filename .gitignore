@@ -34,3 +34,7 @@ htmlcov/
 # HACS / HA dev
 *.zip
 *.code-workspace
+
+# Local agent config. This is a public repo; project skills hold host addresses
+# and operator credentials and must never be published here.
+.cursor/
