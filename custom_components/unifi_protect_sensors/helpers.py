@@ -2,45 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
+
+# Distinguishes "key absent from the payload" from "key present with value None".
+# Protect reports a genuinely unknown reading as null, which must stay null.
+MISSING: Final = object()
 
 
-def get_nested(data: dict, path: str) -> Any | None:
-    """Walk a dot-separated path into a nested dict, returning None on any missing key."""
+def get_nested(data: dict, path: str, default: Any = None) -> Any:
+    """Walk a dot-separated path into a nested dict, returning ``default`` if absent."""
     cur: Any = data
     for key in path.split("."):
         if not isinstance(cur, dict) or key not in cur:
-            return None
+            return default
         cur = cur[key]
     return cur
 
 
 def field_exists(data: dict, path: str) -> bool:
     """Return True if the dot-separated key path exists in data (value may be None)."""
-    keys = path.split(".")
-    cur: Any = data
-    for key in keys[:-1]:
-        if not isinstance(cur, dict) or key not in cur:
-            return False
-        cur = cur[key]
-    return isinstance(cur, dict) and keys[-1] in cur
-
-
-def device_type_matches(device_type: str, expected_source: str) -> bool:
-    """Return True if ``device_type`` is one of the comma-separated expected sources.
-
-    An empty ``expected_source`` matches every device (used for metrics that exist
-    on all device types). Matching is case-insensitive and exact against Protect's
-    model identifier (the device ``type`` field, e.g. ``"USL-Environmental-US"``).
-
-    Exact matching is deliberate: a blank or unknown ``device_type`` matches nothing
-    (so unrecognised devices get no entities rather than all of them), and partial
-    overlaps between model names cannot cross-match.
-    """
-    sources = [s.strip().lower() for s in expected_source.split(",") if s.strip()]
-    if not sources:
-        return True
-    return device_type.strip().lower() in sources
+    return get_nested(data, path, MISSING) is not MISSING
 
 
 def deep_merge(base: dict, delta: dict) -> dict:

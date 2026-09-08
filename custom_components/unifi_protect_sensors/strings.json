@@ -16,16 +16,30 @@
           "api_key": "Generate in the Protect web UI under System → API Keys. Leave blank to use username/password instead.",
           "verify_ssl": "Enable only if your console has a valid TLS certificate. Most UniFi devices use self-signed certificates."
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate UniFi Protect Sensors",
+        "description": "The console at {host} rejected the stored credentials. Enter an API key or a local username and password.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "api_key": "API Key (preferred)"
+        },
+        "data_description": {
+          "api_key": "Generate in the Protect web UI under System → API Keys. Leave blank to use username/password instead."
+        }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect to the UniFi Protect console. Check the host, port, and SSL setting.",
       "invalid_auth": "Invalid username or password.",
       "invalid_api_key": "Invalid API key. Verify the key in the Protect console under System → API Keys.",
+      "missing_credentials": "Enter an API key, or both a username and a password.",
       "unknown": "Unexpected error — check the Home Assistant logs for details."
     },
     "abort": {
-      "already_configured": "This console is already configured."
+      "already_configured": "This console is already configured.",
+      "reauth_successful": "Credentials updated; the integration has been reloaded."
     }
   },
   "options": {

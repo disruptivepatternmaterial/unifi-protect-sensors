@@ -20,17 +20,28 @@ Instead, WS updates mutate ``self.data`` in place and call
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from datetime import timedelta
 from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import BOOTSTRAP_PATH, LOGIN_PATH, WS_PATH
+from .const import (
+    BOOTSTRAP_PATH,
+    CONF_API_KEY,
+    CONF_VERIFY_SSL,
+    DEFAULT_PORT,
+    DEFAULT_VERIFY_SSL,
+    LOGIN_PATH,
+    WS_PATH,
+)
 from .helpers import deep_merge
 from .protect_ws import decode_ws_message
 
@@ -49,6 +60,10 @@ _WS_BACKOFF_MAX = 60
 # connection stall the update loop.
 _HTTP_TIMEOUT = 10
 
+# Errors the coordinator raises deliberately; they already carry the right meaning
+# for Home Assistant and must not be re-wrapped as a generic transport failure.
+_DELIBERATE_FAILURES = (UpdateFailed, ConfigEntryAuthFailed)
+
 
 class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Poll UniFi Protect sensor payloads and stream live updates."""
@@ -65,12 +80,12 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         # after the entry is reloaded by the options update listener.
         config: dict[str, Any] = {**entry.data, **entry.options}
         self._entry_id: str = entry.entry_id
-        self._host: str = config["host"]
-        self._port: int = int(config.get("port", 443))
-        self._username: str = config.get("username", "")
-        self._password: str = config.get("password", "")
-        self._api_key: str = config.get("api_key", "")
-        self._verify_ssl: bool = bool(config.get("verify_ssl", False))
+        self._host: str = config[CONF_HOST]
+        self._port: int = int(config.get(CONF_PORT) or DEFAULT_PORT)
+        self._username: str = config.get(CONF_USERNAME) or ""
+        self._password: str = config.get(CONF_PASSWORD) or ""
+        self._api_key: str = config.get(CONF_API_KEY) or ""
+        self._verify_ssl: bool = bool(config.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL))
         self._base_url = f"https://{self._host}:{self._port}"
         self._session_cookie: str | None = None
         # ssl=False disables verification; ssl=None uses the default context (verifies)
@@ -93,13 +108,17 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                 json={"username": self._username, "password": self._password},
                 ssl=self._ssl,
             ) as resp:
+                if resp.status in (401, 403):
+                    # Credentials are wrong, not merely unreachable — ask the user
+                    # to re-enter them instead of retrying a dead password forever.
+                    raise ConfigEntryAuthFailed(f"Login rejected (HTTP {resp.status})")
                 if resp.status not in (200, 201):
                     raise UpdateFailed(f"Login failed with HTTP {resp.status}")
                 token = resp.cookies.get("TOKEN") or resp.cookies.get("token")
                 if token is None:
                     raise UpdateFailed("Login succeeded but no TOKEN cookie returned")
                 return token.value
-        except UpdateFailed:
+        except _DELIBERATE_FAILURES:
             raise
         except Exception as err:
             raise UpdateFailed(f"Login request failed: {err}") from err
@@ -119,9 +138,25 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                 headers["Cookie"] = f"TOKEN={self._session_cookie}"
         return headers
 
+    async def _async_invalidate_session(self, rejected_cookie: str | None) -> None:
+        """Drop a session cookie the console rejected, under the login lock.
+
+        Only clears the cookie still being held, so a fresh login that landed
+        between the rejected request and this call is not thrown away.
+        """
+        if self._api_key:
+            # A static API key cannot be refreshed; there is no session to drop.
+            return
+        async with self._login_lock:
+            if self._session_cookie == rejected_cookie:
+                self._session_cookie = None
+
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Fetch the full sensor snapshot from the Protect console bootstrap."""
         headers = await self._async_auth_headers()
+        # The exact cookie this request will carry, so a 401 invalidates that
+        # session rather than whatever is current by the time the response lands.
+        sent_cookie = headers.get("Cookie", "").removeprefix("TOKEN=") or None
 
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
         try:
@@ -135,14 +170,14 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     # re-authenticates (some consoles return 403, not 401, for a
                     # stale cookie). For a static API key there is nothing to
                     # refresh, so report it as a credential problem.
-                    self._session_cookie = None
                     if self._api_key:
-                        raise UpdateFailed(f"API key rejected (HTTP {resp.status})")
+                        raise ConfigEntryAuthFailed(f"API key rejected (HTTP {resp.status})")
+                    await self._async_invalidate_session(sent_cookie)
                     raise UpdateFailed("Session expired; will re-authenticate on next update")
                 if resp.status != 200:
                     raise UpdateFailed(f"Bootstrap endpoint returned HTTP {resp.status}")
                 payload: Any = await resp.json()
-        except UpdateFailed:
+        except _DELIBERATE_FAILURES:
             raise
         except Exception as err:
             raise UpdateFailed(f"Cannot reach Protect console: {err}") from err
@@ -159,7 +194,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             "Protect bootstrap: %d device(s) — %s",
             len(result),
             ", ".join(
-                f"{d.get('name', did)}({d.get('type') or d.get('modelKey', '?')})"
+                f"{d.get('name') or did}({d.get('type') or d.get('modelKey') or '?'})"
                 for did, d in result.items()
             ),
         )
@@ -213,6 +248,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         token delivered via a close frame).
         """
         headers = await self._async_auth_headers()
+        sent_cookie = headers.get("Cookie", "").removeprefix("TOKEN=") or None
         session = async_get_clientsession(self.hass, verify_ssl=self._verify_ssl)
 
         url = f"{self._base_url}{WS_PATH}"
@@ -249,7 +285,7 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             # triggers a fresh login instead of retrying a dead token.
             if err.status in (401, 403):
                 _LOGGER.debug("Protect WebSocket auth failed (%d); clearing session cookie", err.status)
-                self._session_cookie = None
+                await self._async_invalidate_session(sent_cookie)
             raise
         finally:
             if ws is not None:
@@ -312,10 +348,14 @@ class ProtectSensorsCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
     async def async_shutdown(self) -> None:
         """Cancel the WebSocket listener and run base shutdown."""
         if self._ws_task is not None:
-            self._ws_task.cancel()
-            try:
-                await self._ws_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
-            self._ws_task = None
+            task, self._ws_task = self._ws_task, None
+            task.cancel()
+            # Awaiting a cancelled task re-raises CancelledError; that is the
+            # expected outcome here, not a failure. Anything else is a real bug in
+            # the listener and is logged rather than silently discarded.
+            with contextlib.suppress(asyncio.CancelledError):
+                try:
+                    await task
+                except Exception:  # noqa: BLE001 - shutdown must always complete
+                    _LOGGER.exception("Protect WebSocket listener failed during shutdown")
         await super().async_shutdown()

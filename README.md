@@ -57,6 +57,10 @@ The key is sent as a `Bearer` token on every request.
 The session cookie is stored in memory and refreshed automatically on 401/403 responses and
 on WebSocket auth failures.
 
+**If your credentials stop working** (a rotated API key, a changed password), Home Assistant
+raises a reauthentication prompt on the integration card — enter the new API key or password
+there. Deleting and re-adding the integration is not required.
+
 ## How Updates Work
 
 The integration uses two data channels in parallel:
@@ -92,17 +96,21 @@ See [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ```bash
 # Create a test virtual environment (one time)
-python3.11 -m venv .venv_test
-.venv_test/bin/pip install pytest pytest-asyncio
+python3 -m venv .venv_test
+.venv_test/bin/pip install pytest pytest-asyncio ruff aiohttp voluptuous
 
 # Run tests (no HA install required — stubs are injected automatically)
 .venv_test/bin/pytest tests/ -q
 
 # Lint (ruff config in pyproject.toml)
-ruff check custom_components/ tests/
+.venv_test/bin/ruff check custom_components/ tests/
 ```
 
 Tests cover: helper functions, WebSocket frame decoding (incl. truncated/oversized frames),
-deep-merge, sensor/binary-sensor descriptions, device-type matching, dynamic entity
-discovery, coordinator auth/login-lock, config-entry migration, and entity property logic
-(including availability). 87 tests, no live HA instance needed.
+deep-merge, sensor/binary-sensor descriptions, device-model matching, dynamic entity
+discovery, coordinator auth (login lock, session invalidation, reauth triggers), the config
+and reauth flows, config-entry migration, translation/strings parity, and entity property
+logic including availability. 129 tests, no live HA instance needed.
+
+The same checks run in CI on every push and pull request, along with Home Assistant's
+`hassfest` and HACS repository validation.

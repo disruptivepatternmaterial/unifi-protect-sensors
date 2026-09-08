@@ -124,6 +124,9 @@ def _install_ha_stubs() -> None:
     class ConfigEntryNotReady(Exception):
         pass
 
+    class ConfigEntryAuthFailed(Exception):
+        pass
+
     # --- HomeAssistant const stubs ---
     class UnitOfTemperature:
         CELSIUS = "°C"
@@ -131,6 +134,12 @@ def _install_ha_stubs() -> None:
 
     # --- Wire up sys.modules stubs ---
     ha_const = MagicMock()
+    # Real values: these are config-entry storage keys, so the tests must use the
+    # same strings Home Assistant does.
+    ha_const.CONF_HOST = "host"
+    ha_const.CONF_PORT = "port"
+    ha_const.CONF_USERNAME = "username"
+    ha_const.CONF_PASSWORD = "password"
     ha_const.PERCENTAGE = "%"
     ha_const.LIGHT_LUX = "lx"
     ha_const.CONCENTRATION_PARTS_PER_MILLION = "ppm"
@@ -155,17 +164,55 @@ def _install_ha_stubs() -> None:
 
     entity_mod = MagicMock()
     entity_mod.EntityCategory = EntityCategory
+    # DeviceInfo is a TypedDict in Home Assistant, so calling it yields a plain dict.
+    entity_mod.DeviceInfo = dict
 
     exceptions_mod = MagicMock()
     exceptions_mod.ConfigEntryNotReady = ConfigEntryNotReady
+    exceptions_mod.ConfigEntryAuthFailed = ConfigEntryAuthFailed
 
     ha_core = MagicMock()
     ha_core.HomeAssistant = MagicMock
     ha_core.callback = lambda fn: fn  # passthrough decorator
 
+    # --- Config / options flow stubs ---
+    # Real base classes (not MagicMocks) so the flow modules are importable and
+    # each step's return value can be asserted on.
+    class _FlowBase:
+        def __init_subclass__(cls, **kwargs) -> None:  # absorbs `domain=...`
+            super().__init_subclass__()
+
+        def async_show_form(self, **kwargs) -> dict:
+            return {"type": "form", **kwargs}
+
+        def async_create_entry(self, **kwargs) -> dict:
+            return {"type": "create_entry", **kwargs}
+
+        def async_abort(self, **kwargs) -> dict:
+            return {"type": "abort", **kwargs}
+
+        async def async_set_unique_id(self, unique_id) -> None:
+            self.unique_id = unique_id
+
+        def _abort_if_unique_id_configured(self) -> None:
+            return None
+
+    class ConfigFlow(_FlowBase):
+        pass
+
+    class OptionsFlow(_FlowBase):
+        pass
+
+    config_entries_mod = MagicMock()
+    config_entries_mod.ConfigFlow = ConfigFlow
+    config_entries_mod.OptionsFlow = OptionsFlow
+
     # --- aiohttp stub (WSMsgType used in coordinator.py) ---
-    # Only stub if the real package is not available; tests don't exercise WS directly.
-    if "aiohttp" not in sys.modules:
+    # Prefer the real package: the exception classes must be genuine so that
+    # `except (aiohttp.ClientError, ...)` in the config flow is exercised for real.
+    try:
+        import aiohttp  # noqa: F401
+    except ImportError:
         import enum
 
         class _WSMsgType(enum.IntEnum):
@@ -184,7 +231,7 @@ def _install_ha_stubs() -> None:
     stubs: dict[str, Any] = {
         "homeassistant": MagicMock(),
         "homeassistant.core": ha_core,
-        "homeassistant.config_entries": MagicMock(),
+        "homeassistant.config_entries": config_entries_mod,
         "homeassistant.exceptions": exceptions_mod,
         "homeassistant.const": ha_const,
         "homeassistant.components": MagicMock(),
@@ -198,6 +245,15 @@ def _install_ha_stubs() -> None:
         "homeassistant.helpers.aiohttp_client": MagicMock(),
     }
     sys.modules.update(stubs)
+
+    # `from homeassistant import config_entries` resolves the attribute on the
+    # parent package before consulting sys.modules, so a submodule stub that is
+    # only registered in sys.modules would be silently bypassed. Mirror every
+    # stub onto its parent so both import styles reach the same object.
+    for dotted, module in stubs.items():
+        parent_name, _, attribute = dotted.rpartition(".")
+        if parent_name:
+            setattr(stubs[parent_name], attribute, module)
 
 
 _install_ha_stubs()

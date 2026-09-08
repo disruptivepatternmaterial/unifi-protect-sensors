@@ -4,7 +4,7 @@
   "type": "UP-AirQuality",
   "name": "Air Quality Sensor",
   "state": "CONNECTED",
-  "mac": "74F92CA88F38",
+  "mac": "AABBCCDDEEFF",
   "mountType": "none",
   "batteryStatus": {
     "percentage": null,

@@ -4,6 +4,67 @@ All notable changes to this project will be documented here.
 
 ---
 
+## [0.7.0] — 2026-09-07
+
+### Security
+
+- **Local operator tooling is no longer published with the integration** — a
+  maintainer-only agent-skill file holding deployment host details was removed
+  from version control, and `.cursor/` is now ignored so it cannot return.
+- **A real device MAC address was published in a test fixture** —
+  `tests/fixtures/up_airquality.json` now uses the documentation placeholder
+  `AABBCCDDEEFF`, matching the guidance already in `docs/PAYLOAD_GUIDE.md`
+  ([#1](https://github.com/disruptivepatternmaterial/unifi-protect-sensors/issues/1)).
+
+### Added
+
+- **Reauthentication flow** — when the console rejects the stored credentials,
+  Home Assistant now prompts for a new API key or password instead of leaving
+  the integration retrying a dead credential every 30 seconds. Previously the
+  only way to change credentials was to delete and re-add the integration.
+- **Continuous integration** — every push and pull request now runs ruff,
+  the test suite, Home Assistant `hassfest`, and HACS validation. None of these
+  ran automatically before, so a broken commit could be tagged and released.
+
+### Fixed
+
+- **Devices with no name registered as `None`** — Protect reports `name: null`
+  for a device that has never been named, and that null was passed straight to
+  the device registry. Such devices now fall back to their device id.
+- **Wrong credentials retried forever** — a rejected password or API key raised
+  a generic update failure, so the coordinator kept polling with a credential
+  the console had already refused. Both now raise `ConfigEntryAuthFailed` and
+  trigger the new reauth flow.
+- **Blank credentials reported "invalid username or password"** — submitting the
+  config form with no API key and no password sent an empty login to the console
+  and surfaced its rejection. The form now reports that credentials are missing.
+- **A late session invalidation could discard a fresh login** — a 401 arriving
+  after a concurrent reconnect had already re-authenticated would clear the new
+  cookie, forcing another login. Invalidation now only clears the exact session
+  that was rejected, and is a no-op for API-key auth, which has no session.
+- **Shutdown swallowed real errors** — cancelling the WebSocket listener caught
+  and discarded every exception, including bugs in the listener. Cancellation is
+  now the only silently-accepted outcome; anything else is logged.
+- **A binary sensor reported "clear" for a device that had vanished** — a device
+  missing from the snapshot now reports unknown rather than fabricating an
+  off state.
+
+### Changed
+
+- **Entity plumbing shared between platforms** — `sensor.py` and
+  `binary_sensor.py` each carried their own copy of device discovery, device
+  registry creation, availability and coordinator wiring. That logic now lives
+  once in `entity.py`; the platform modules only declare which readings they
+  expose. Device entries are created from each entity's `DeviceInfo` instead of
+  a hand-rolled device-registry pass.
+- **Device models are a typed list, not a comma-separated string** — entity
+  descriptions declare `device_types=(MODEL_UP_AIRQUALITY,)` using named
+  constants and are matched with `description.supports(...)`, replacing runtime
+  splitting of a `"UFP-SENSE, USL-Environmental-US"` string.
+- **The config flow is now covered by tests.** It could not even be imported
+  under the test stubs, so a syntax or name error in the module that gates setup
+  would only have been discovered by a user whose integration failed to load.
+
 ## [0.6.0] — 2026-06-29
 
 ### Fixed
